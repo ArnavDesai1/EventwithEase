@@ -18,6 +18,18 @@ const discountCodeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const bookingPromoSchema = new mongoose.Schema(
+  {
+    active: { type: Boolean, default: false },
+    headline: { type: String, default: "", trim: true },
+    subtext: { type: String, default: "", trim: true },
+    badge: { type: String, default: "Limited offer", trim: true },
+    /** When set, overlay hides automatically after this instant (organiser pre-book window). */
+    endsAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const ticketTypeSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -54,6 +66,8 @@ const eventSchema = new mongoose.Schema(
     agenda: { type: [String], default: [] },
     speakers: { type: [String], default: [] },
     faq: { type: [faqSchema], default: [] },
+    /** Optional marketing strip / overlay on the public event page (pre-book, flash sale copy). */
+    bookingPromo: { type: bookingPromoSchema, default: undefined },
   },
   { timestamps: true }
 );

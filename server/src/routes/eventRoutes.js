@@ -105,10 +105,40 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", requireAuth, requireRole("organiser", "admin"), async (req, res) => {
   try {
-    const { title, description, location, city = "", category, date, coverImage, ticketTypes, discountCodes = [], agenda = [], speakers = [], faq = [], venueMapUrl = "", venueType = "physical" } = req.body;
+    const {
+      title,
+      description,
+      location,
+      city = "",
+      category,
+      date,
+      coverImage,
+      ticketTypes,
+      discountCodes = [],
+      agenda = [],
+      speakers = [],
+      faq = [],
+      venueMapUrl = "",
+      venueType = "physical",
+      bookingPromo: rawPromo,
+    } = req.body;
 
     if (!title || !description || !location || !date || !Array.isArray(ticketTypes) || !ticketTypes.length) {
       return res.status(400).json({ message: "Missing required event fields." });
+    }
+
+    let bookingPromo;
+    if (rawPromo && typeof rawPromo === "object") {
+      const endsRaw = rawPromo.endsAt;
+      const endsAt = endsRaw ? new Date(endsRaw) : null;
+      bookingPromo = {
+        active: Boolean(rawPromo.active),
+        headline: String(rawPromo.headline || "").trim().slice(0, 160),
+        subtext: String(rawPromo.subtext || "").trim().slice(0, 400),
+        badge: String(rawPromo.badge || "Limited offer").trim().slice(0, 48),
+        endsAt: endsAt && !Number.isNaN(endsAt.getTime()) ? endsAt : null,
+      };
+      if (!bookingPromo.headline) bookingPromo.active = false;
     }
 
     const event = await Event.create({
@@ -121,6 +151,7 @@ router.post("/", requireAuth, requireRole("organiser", "admin"), async (req, res
       coverImage,
       organiserId: req.user._id,
       venueMapUrl,
+      ...(bookingPromo ? { bookingPromo } : {}),
       agenda: Array.isArray(agenda) ? agenda.filter(Boolean) : [],
       speakers: Array.isArray(speakers) ? speakers.filter(Boolean) : [],
       faq: Array.isArray(faq)

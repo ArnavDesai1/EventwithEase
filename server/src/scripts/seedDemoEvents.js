@@ -29,6 +29,19 @@ import { applyRollingDatesToDemoEvents } from "./rollingDemoDates.mjs";
 const USE_ROLLING_DATES = process.env.DEMO_FIXED_DATES !== "1";
 const demoEvents = USE_ROLLING_DATES ? applyRollingDatesToDemoEvents(importedDemoEvents) : importedDemoEvents;
 
+const DAY_MS = 86400000;
+/** Keep demo booking promos in a visible window: ends before event, after now (seed run time). */
+for (const e of demoEvents) {
+  if (!e.bookingPromo?.active) continue;
+  const evTime = new Date(e.date).getTime();
+  const now = Date.now();
+  const beforeEvent = evTime - DAY_MS;
+  const cap = now + 10 * DAY_MS;
+  const raw = Math.min(cap, beforeEvent);
+  const ends = Math.max(raw, now + 2 * 3600 * 1000);
+  e.bookingPromo = { ...e.bookingPromo, endsAt: new Date(ends).toISOString() };
+}
+
 function ticketCode() {
   return `EWE-${uuidv4().slice(0, 8).toUpperCase()}`;
 }
@@ -167,10 +180,16 @@ async function seedDemoEvents() {
             date: new Date(demo.date),
             discountCodes: demo.discountCodes || [],
             ticketTypes: demo.ticketTypes,
+            ...(demo.bookingPromo ? { bookingPromo: demo.bookingPromo } : {}),
           },
         }
       );
     }
+  }
+
+  for (const demo of demoEvents) {
+    if (!demo.bookingPromo) continue;
+    await Event.updateOne({ title: demo.title }, { $set: { bookingPromo: demo.bookingPromo } });
   }
 
   await Event.updateOne(

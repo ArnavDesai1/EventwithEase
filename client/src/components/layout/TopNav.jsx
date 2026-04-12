@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function TopNav({
   user,
@@ -80,36 +81,59 @@ export default function TopNav({
             <button type="button" className={`site-nav-link${navActiveKey === "book" ? " is-active" : ""}`} onClick={wrapNav(onGoBook)}>
               Book
             </button>
-            <button type="button" className={`site-nav-link${navActiveKey === "tickets" ? " is-active" : ""}`} onClick={wrapNav(onGoTickets)}>
+            <Link
+              className={`site-nav-link${navActiveKey === "tickets" ? " is-active" : ""}`}
+              to="/tickets"
+              onClick={() => {
+                setMenuOpen(false);
+                onGoTickets();
+              }}
+            >
               My tickets
-            </button>
+            </Link>
             {typeof onGoWishlist === "function" ? (
-              <button
-                type="button"
+              <Link
                 className={`site-nav-link${navActiveKey === "wishlist" ? " is-active" : ""}`}
-                onClick={wrapNav(onGoWishlist)}
+                to="/wishlist"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onGoWishlist();
+                }}
               >
                 Wishlist
-              </button>
+              </Link>
             ) : null}
-            <button
-              type="button"
+            <Link
               className={`site-nav-link${navActiveKey === "organise" ? " is-active" : ""}`}
-              onClick={wrapNav(onGoOrganise)}
+              to="/organise"
+              onClick={() => {
+                setMenuOpen(false);
+                onGoOrganise();
+              }}
             >
               Organise
-            </button>
-            <button
-              type="button"
+            </Link>
+            <Link
               className={`site-nav-link${navActiveKey === "checkin" ? " is-active" : ""}`}
-              onClick={wrapNav(onGoCheckIn)}
+              to="/check-in"
+              onClick={() => {
+                setMenuOpen(false);
+                onGoCheckIn();
+              }}
             >
               Check-in
-            </button>
+            </Link>
             {showStatsLink && typeof onGoStats === "function" ? (
-              <button type="button" className={`site-nav-link${navActiveKey === "stats" ? " is-active" : ""}`} onClick={wrapNav(onGoStats)}>
+              <Link
+                className={`site-nav-link${navActiveKey === "stats" ? " is-active" : ""}`}
+                to="/stats"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onGoStats();
+                }}
+              >
                 Stats
-              </button>
+              </Link>
             ) : null}
           </nav>
 

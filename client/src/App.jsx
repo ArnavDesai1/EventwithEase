@@ -47,6 +47,13 @@ const emptyEventForm = {
     { name: "General", price: "499", quantity: "50", earlyBirdPrice: "", earlyBirdEndsAt: "" },
     { name: "VIP", price: "999", quantity: "20", earlyBirdPrice: "", earlyBirdEndsAt: "" },
   ],
+  bookingPromo: {
+    active: false,
+    headline: "",
+    subtext: "",
+    badge: "Pre-book offer",
+    endsAt: "",
+  },
 };
 
 const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
@@ -241,6 +248,7 @@ export default function App() {
   const [myEvents, setMyEvents] = useState([]);
   const [myTickets, setMyTickets] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [promoOverlayDismissed, setPromoOverlayDismissed] = useState(false);
   const [ticketCart, setTicketCart] = useState({});
   const [discountCode, setDiscountCode] = useState("");
   const [dashboard, setDashboard] = useState(null);
@@ -565,6 +573,17 @@ export default function App() {
 
   const selectedEventCancelled = useMemo(() => Boolean(selectedEvent?.cancelledAt), [selectedEvent?.cancelledAt]);
 
+  const bookingPromoLive = useMemo(() => {
+    const p = selectedEvent?.bookingPromo;
+    if (!p?.active || !String(p.headline || "").trim()) return null;
+    if (selectedEventCancelled) return null;
+    if (p.endsAt) {
+      const t = new Date(p.endsAt).getTime();
+      if (Number.isFinite(t) && t <= Date.now()) return null;
+    }
+    return p;
+  }, [selectedEvent?.bookingPromo, selectedEventCancelled]);
+
   const wishlistSet = useMemo(() => new Set(wishlist.map(String)), [wishlist]);
 
   const wishlistedEvents = useMemo(
@@ -650,30 +669,51 @@ export default function App() {
 
   const ticketsPath = useMemo(() => /^\/tickets\/?$/.test(location.pathname), [location.pathname]);
   const wishlistPath = useMemo(() => /^\/wishlist\/?$/.test(location.pathname), [location.pathname]);
+  const organisePath = useMemo(() => /^\/organise\/?$/.test(location.pathname), [location.pathname]);
+  const checkinPath = useMemo(() => /^\/check-in\/?$/.test(location.pathname), [location.pathname]);
 
   const navActiveKey = useMemo(() => {
     if (statsPath) return "stats";
     if (eventIdInPath) return "book";
     if (ticketsPath) return "tickets";
     if (wishlistPath) return "wishlist";
+    if (organisePath) return "organise";
+    if (checkinPath) return "checkin";
     if (profileMode === "organiser") return "organise";
     if (profileMode === "checkin") return "checkin";
     return "discover";
-  }, [statsPath, eventIdInPath, ticketsPath, wishlistPath, profileMode]);
+  }, [statsPath, eventIdInPath, ticketsPath, wishlistPath, organisePath, checkinPath, profileMode]);
 
   useEffect(() => {
     if (loading) return;
-    if (eventIdInPath || hostIdInPath || statsPath || ticketsPath || wishlistPath) return;
+    if (
+      eventIdInPath ||
+      hostIdInPath ||
+      statsPath ||
+      ticketsPath ||
+      wishlistPath ||
+      organisePath ||
+      checkinPath
+    )
+      return;
     const norm = (location.pathname || "/").replace(/\/$/, "") || "/";
     if (norm === "/") {
       lastOpenedEventIdRef.current = "";
       setSelectedEvent(null);
     }
-  }, [loading, location.pathname, eventIdInPath, hostIdInPath, statsPath, ticketsPath, wishlistPath]);
+  }, [loading, location.pathname, eventIdInPath, hostIdInPath, statsPath, ticketsPath, wishlistPath, organisePath, checkinPath]);
 
   useEffect(() => {
+    if (organisePath && user && isOrganiser) {
+      setProfileMode("organiser");
+      return;
+    }
+    if (checkinPath && user && (isOrganiser || staffMyEvents.length > 0)) {
+      setProfileMode("checkin");
+      return;
+    }
     if (eventIdInPath || ticketsPath || wishlistPath) setProfileMode("attendee");
-  }, [eventIdInPath, ticketsPath, wishlistPath]);
+  }, [organisePath, checkinPath, eventIdInPath, ticketsPath, wishlistPath, user, isOrganiser, staffMyEvents.length]);
 
   useEffect(() => {
     const baseTitle = "EventwithEase — Events, tickets & check-in";
@@ -873,13 +913,22 @@ export default function App() {
     }
 
     if (stripeSuccess) {
+      const eventIdFromBookingPayload = (payload) => {
+        const b = payload?.booking;
+        if (!b?.eventId) return null;
+        const e = b.eventId;
+        return typeof e === "object" && e?._id ? String(e._id) : String(e);
+      };
+
       const sessionId = params.get("session_id");
       const pending = localStorage.getItem("eventwithease-pending-payment");
       if (sessionId) {
         try {
-          await api.post("/bookings", { stripeCheckoutSessionId: sessionId });
+          const { data } = await api.post("/bookings", { stripeCheckoutSessionId: sessionId });
           localStorage.removeItem("eventwithease-pending-payment");
           await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds()]);
+          const evtId = eventIdFromBookingPayload(data);
+          if (evtId) await loadNetworking(evtId);
           flash("Stripe payment confirmed. Tickets generated.");
         } catch (error) {
           flash(error.response?.data?.message || "Stripe payment confirmed but tickets could not be created.", true);
@@ -887,13 +936,15 @@ export default function App() {
       } else if (pending) {
         try {
           const parsed = JSON.parse(pending);
-          await api.post("/bookings", {
+          const { data } = await api.post("/bookings", {
             eventId: parsed.eventId,
             items: parsed.items,
             discountCode: parsed.discountCode,
           });
           localStorage.removeItem("eventwithease-pending-payment");
           await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds()]);
+          const evtId = eventIdFromBookingPayload(data) || (parsed.eventId ? String(parsed.eventId) : null);
+          if (evtId) await loadNetworking(evtId);
           flash("Stripe payment confirmed. Tickets generated.");
         } catch (error) {
           flash(error.response?.data?.message || "Stripe payment confirmed but tickets could not be created.", true);
@@ -1021,6 +1072,22 @@ export default function App() {
   }
 
   const updateAuthField = (key, value) => setAuthForm((current) => ({ ...current, [key]: value }));
+
+  const updateBookingPromo = (key, value) =>
+    setEventForm((current) => ({
+      ...current,
+      bookingPromo: { ...current.bookingPromo, [key]: value },
+    }));
+
+  function userHasBookingForEvent(eventId) {
+    if (!user || !eventId) return false;
+    return myTickets.some(
+      (t) =>
+        String(t.eventId?._id || t.eventId) === String(eventId) &&
+        t.status !== "refunded" &&
+        t.status !== "expired"
+    );
+  }
 
   /** Shared between #ewe-account and the host-profile auth modal (same ref for Google button). */
   function renderGuestAuthFormFields() {
@@ -1219,7 +1286,12 @@ export default function App() {
       if (updateUrl) {
         navigate(`/event/${id}`, { replace: false });
       }
-      await Promise.all([loadReviews(id), loadNetworking(id)]);
+      await loadReviews(id);
+      if (userHasBookingForEvent(id)) {
+        await loadNetworking(id);
+      } else {
+        setNetworkingList([]);
+      }
       setProfileMode("attendee");
       flash(
         data.cancelledAt
@@ -1233,6 +1305,10 @@ export default function App() {
       }
     }
   }
+
+  useEffect(() => {
+    setPromoOverlayDismissed(false);
+  }, [selectedEvent?._id]);
 
   useEffect(() => {
     if (!eventIdInPath) {
@@ -1508,9 +1584,10 @@ export default function App() {
       });
       setLastBookingErrorCode(null);
       await Promise.all([loadEvents(), loadMyTickets()]);
+      await loadNetworking(selectedEvent._id);
       setTicketCart(Object.fromEntries(selectedEvent.ticketTypes.map((ticket) => [ticket._id, 0])));
       setDiscountCode("");
-      setBookingMessage(`${response.data.tickets.length} QR ticket(s) generated. Check Your QR tickets below.`);
+      setBookingMessage(`${response.data.tickets.length} QR ticket(s) generated. Open My tickets for your QR codes.`);
       flash("Booking confirmed. Your QR ticket is ready below.");
       requestAnimationFrame(() => {
         ticketsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2093,14 +2170,13 @@ export default function App() {
 
   function goOrganise() {
     if (!user) {
-      setProfileMode("attendee");
       flash("Sign in with an organiser account to create and manage events.", true);
       if (hostIdInPath) {
         setHostAuthModalOpen(true);
         setAuthMode("login");
         return;
       }
-      scrollToRef(authRef);
+      navigate("/organise");
       return;
     }
     if (!isOrganiser) {
@@ -2109,16 +2185,11 @@ export default function App() {
         navigate("/", { state: { scrollTo: "ewe-account" } });
         return;
       }
-      scrollToRef(authRef);
-      return;
-    }
-    if (hostIdInPath) {
-      navigate("/", { state: { scrollTo: "ewe-organise" } });
-      setProfileMode("organiser");
+      navigate("/organise");
       return;
     }
     setProfileMode("organiser");
-    scrollToRef(organiserRef);
+    navigate("/organise");
   }
 
   function goCheckIn() {
@@ -2129,25 +2200,20 @@ export default function App() {
         setAuthMode("login");
         return;
       }
-      scrollToRef(authRef);
+      navigate("/check-in");
       return;
     }
-    if (!isOrganiser) {
-      flash("Check-in is available to event hosts.", true);
+    if (!isOrganiser && staffMyEvents.length === 0) {
+      flash("Check-in is available to hosts and invited door staff.", true);
       if (hostIdInPath) {
         navigate("/", { state: { scrollTo: "ewe-account" } });
         return;
       }
-      scrollToRef(authRef);
-      return;
-    }
-    if (hostIdInPath) {
-      navigate("/", { state: { scrollTo: "ewe-checkin" } });
-      setProfileMode("checkin");
+      navigate("/check-in");
       return;
     }
     setProfileMode("checkin");
-    scrollToRef(checkinRef);
+    navigate("/check-in");
   }
 
   function openAccount() {
@@ -2786,7 +2852,7 @@ export default function App() {
   }
 
   
-  if (eventIdInPath || ticketsPath || wishlistPath) {
+  if (eventIdInPath || ticketsPath || wishlistPath || organisePath || checkinPath) {
     return (
       <div className="app-root">
         <a className="skip-link" href="#ewe-subpage">
@@ -2903,6 +2969,21 @@ export default function App() {
 
           {selectedEvent ? (
             <div className="details-card">
+              {bookingPromoLive && !promoOverlayDismissed ? (
+                <div className="event-promo-banner" role="region" aria-label="Booking offer">
+                  <button
+                    type="button"
+                    className="event-promo-banner__close"
+                    onClick={() => setPromoOverlayDismissed(true)}
+                    aria-label="Dismiss offer"
+                  >
+                    ×
+                  </button>
+                  <span className="event-promo-banner__badge">{bookingPromoLive.badge || "Offer"}</span>
+                  <p className="event-promo-banner__headline">{bookingPromoLive.headline}</p>
+                  {bookingPromoLive.subtext ? <p className="event-promo-banner__sub">{bookingPromoLive.subtext}</p> : null}
+                </div>
+              ) : null}
               <div
                 className="details-cover"
                 style={{
@@ -3331,566 +3412,33 @@ export default function App() {
         </section>
                 </>
               ) : null}
-            </main>
-          </div>
-        </div>
-        <SiteFooter />
-      </div>
-    );
-  }
 
-  return (
-    <div className="app-root">
-      <a className="skip-link" href="#ewe-main">
-        Skip to workspace
-      </a>
-      <TopNav
-        user={user}
-        isOrganiser={isOrganiser}
-        profileMode={profileMode}
-        onGoDiscover={goDiscover}
-        onGoBook={goBook}
-        onGoTickets={goTickets}
-        onGoWishlist={goWishlist}
-        onGoOrganise={goOrganise}
-        onGoCheckIn={goCheckIn}
-        onGoStats={goStats}
-        showStatsLink={isAdminUser}
-        onOpenAccount={openAccount}
-        onLogout={logout}
-        notificationUnread={user ? unreadCount : 0}
-        onNotificationsToggle={() => setNotifOpen((o) => !o)}
-        notificationsOpen={notifOpen}
-        navActiveKey={navActiveKey}
-      />
-      {user && nextBookedEventCountdown ? (
-        <div className="countdown-strip" role="status">
-          <button
-            type="button"
-            className="countdown-strip__btn"
-            onClick={() => {
-              setNotifOpen(false);
-              handleSelectEvent(nextBookedEventCountdown.eid);
-            }}
-          >
-            <span className="countdown-strip__label">Next ticketed event</span>
-            <span className="countdown-strip__title">{nextBookedEventCountdown.title}</span>
-            <span className="countdown-strip__time">{formatMsAsCountdown(nextBookedEventCountdown.left)}</span>
-          </button>
-        </div>
-      ) : null}
-      <NotificationsPanel
-        open={notifOpen}
-        onClose={() => setNotifOpen(false)}
-        notifications={notifications}
-        markRead={markRead}
-        markAllRead={markAllRead}
-        navigate={navigate}
-        flash={flash}
-        desktopSupported={desktopSupported}
-        desktopPermission={desktopPermission}
-        requestDesktopPermission={requestDesktopPermission}
-        ticketPreview={ticketNotificationsPreview}
-        followingHosts={followingHosts}
-        formatMsAsCountdown={formatMsAsCountdown}
-        formatDate={formatDate}
-      />
-      <div className="app-flow">
-        <div className="app-shell">
-          <header className="hero-panel">
-        <div className="hero-copy-block">
-          <p className="eyebrow">EventwithEase</p>
-          <p className="hero-kicker">Event publishing · Ticketing · Check-in</p>
-          <h1>
-            <span>Make your next</span>
-            <span className="hero-accent">event feel bigger</span>
-            <span>before it even starts.</span>
-          </h1>
-          <p className="hero-copy">
-            Organisers launch events, sell ticket types, and track turnout live. Attendees browse, book, carry a QR
-            pass, and walk in with a single scan.
-          </p>
-          <div className="hero-cta-row">
-            <PrimaryButton type="button" onClick={goDiscover}>
-              Browse events
-            </PrimaryButton>
-            <button type="button" className="hero-cta-secondary" onClick={goOrganise}>
-              Host an event
-            </button>
-          </div>
-          <p className="hero-trust">Sandbox payments · Per-ticket QR · CSV export · Refund workflow</p>
-          <div className="hero-strip">
-            {[
-              { mode: "organiser", label: "Organiser", sub: "Create events · Monitor revenue" },
-              { mode: "attendee", label: "Attendee", sub: "Book tickets · QR entry" },
-              { mode: "checkin", label: "Check-in", sub: "Mark attendance in seconds" },
-            ].map(({ mode, label, sub }) => (
-              <button
-                type="button"
-                className={`hero-chip hero-chip-button${profileMode === mode ? " is-active" : ""}`}
-                key={label}
-                onClick={() => focusProfileMode(mode)}
-              >
-                <strong>{label}</strong>
-                <span>{sub}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="hero-stats">
-          {[
-            { value: events.length, label: "Live events" },
-            { value: myTickets.length, label: "Your tickets" },
-            { value: myEvents.length, label: "Managed events" },
-          ].map(({ value, label }) => (
-            <div className="hero-stat-card" key={label}>
-              <strong>
-                <AnimatedNumber value={value} />
-              </strong>
-              <span>{label}</span>
-            </div>
-          ))}
-        </div>
-      </header>
-
-      {statusMessage && <div className="banner success">{statusMessage}</div>}
-      {errorMessage && <div className="banner error">{errorMessage}</div>}
-
-      <main id="ewe-main" className="grid-layout">
-        <section
-          id="ewe-account"
-          className={panelClass("panel auth-panel full-width", ["organiser", "checkin"])}
-          ref={authRef}
-        >
-          <div className="section-head auth-head">
-            <h2>
-              {user
-                ? `Hello, ${user.name.split(" ")[0]}`
-                : authMode === "forgot"
-                  ? "Reset password"
-                  : authMode === "reset"
-                    ? "New password"
-                    : authMode === "signup"
-                      ? "Create account"
-                      : "Sign in"}
-            </h2>
-            {user ? (
-              <button className="ghost-button" onClick={logout}>
-                Logout
-              </button>
-            ) : authMode === "forgot" || authMode === "reset" ? (
-              <button className="ghost-button compact-button" type="button" onClick={() => setAuthMode("login")}>
-                Back
-              </button>
-            ) : (
-              <div className="switch-row">
-                <button className={`tab${authMode === "login" ? " active" : ""}`} type="button" onClick={() => setAuthMode("login")}>
-                  Login
-                </button>
-                <button className={`tab${authMode === "signup" ? " active" : ""}`} type="button" onClick={() => setAuthMode("signup")}>
-                  Signup
-                </button>
-              </div>
-            )}
-          </div>
-
-          {user ? (
-            <div className="user-card">
-              <p className="card-label">Signed in as</p>
-              <p className="user-email">{user.email}</p>
-              <span className="pill">{userRoles.join(" + ")}</span>
-              {fanProgress ? (
-                <div className="fan-progress-card" aria-label="Your event explorer progress">
-                  <div className="fan-progress-head">
-                    <span className="fan-level-badge">Lv {fanProgress.level}</span>
-                    <span className="fan-progress-title">Event explorer</span>
-                    <span className="fan-progress-xp">{fanProgress.score} XP</span>
-                  </div>
-                  <div className="fan-progress-track" title={`Next level at ${fanProgress.levelEnd} XP`}>
-                    <div className="fan-progress-fill" style={{ width: `${fanProgress.pct}%` }} />
-                  </div>
-                  <div className="fan-patron-block" aria-label="Patron progress from ticket spend">
-                    <div className="fan-patron-head">
-                      <span className="fan-patron-title">Patron power</span>
-                      <span className="fan-patron-rank">{fanProgress.patronLabel}</span>
-                      <span className="fan-patron-spend">{formatCurrency(fanProgress.totalSpend)} on active tickets</span>
-                    </div>
-                    <div className="fan-patron-track-wrap">
-                      <div className="fan-patron-track" role="presentation">
-                        <div className="fan-patron-track-fill" style={{ width: `${fanProgress.patronBarPct}%` }} />
-                        {fanProgress.patronTicks.map((tk) => (
-                          <span
-                            key={tk.amt}
-                            className="fan-patron-tick"
-                            style={{ left: `${tk.leftPct}%` }}
-                            title={formatCurrency(tk.amt)}
-                          />
-                        ))}
-                      </div>
-                      <div className="fan-patron-scale" aria-hidden>
-                        <span>0</span>
-                        <span>{formatCurrency(PATRON_SPEND_TIERS[4])}</span>
-                      </div>
-                    </div>
-                    {fanProgress.patronNextHint ? <p className="fan-patron-next">{fanProgress.patronNextHint}</p> : null}
-                    {fanProgress.perkChips.length ? (
-                      <ul className="fan-perk-chips">
-                        {fanProgress.perkChips.map((p) => (
-                          <li key={p.key} className="fan-perk-chip">
-                            {p.label}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                  <p className="auth-note fan-progress-hint">
-                    Level XP: +45 per active ticket · +12 wishlist saves · +20 per host you follow · bonus stacks at 2 / 3 /
-                    5 / 10 / 20 tickets · +1 XP per ₹100 spent (cap 340) · extra bursts at ₹500 / ₹2.5k / ₹10k / ₹25k.
-                  </p>
-                </div>
-              ) : null}
-              <div className="profile-switch">
-                <button
-                  className={`tab${profileMode === "attendee" ? " active" : ""}`}
-                  type="button"
-                  onClick={() => focusProfileMode("attendee")}
-                >
-                  Attendee
-                </button>
-                <button
-                  className={`tab${profileMode === "organiser" ? " active" : ""}`}
-                  type="button"
-                  onClick={() => focusProfileMode("organiser")}
-                >
-                  Organiser
-                </button>
-                <button
-                  className={`tab${profileMode === "checkin" ? " active" : ""}`}
-                  type="button"
-                  onClick={() => focusProfileMode("checkin")}
-                >
-                  Check-in
-                </button>
-              </div>
-              <div className="networking-card">
-                <p className="card-label">Networking profile</p>
-                <label className="networking-toggle">
-                  <input
-                    type="checkbox"
-                    checked={profileForm.networkingOptIn}
-                    onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
-                  />
-                  Share my LinkedIn with fellow attendees
-                </label>
-                <input
-                  placeholder="LinkedIn URL"
-                  value={profileForm.linkedinUrl}
-                  onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
-                />
-                <button className="ghost-button" type="button" onClick={saveProfile}>
-                  Save networking profile
-                </button>
-              </div>
-              {isOrganiser ? (
-                <div className="host-profile-card">
-                  <p className="card-label">Public host profile</p>
-                  <p className="auth-note">
-                    Shown on your <strong>/host/…</strong> page and helps attendees trust you. You can still use the same account to buy
-                    tickets.
-                  </p>
-                  <input
-                    placeholder="Short tagline (e.g. Indie gigs · Mumbai)"
-                    value={profileForm.hostTagline}
-                    onChange={(e) => setProfileForm((current) => ({ ...current, hostTagline: e.target.value }))}
-                  />
-                  <textarea
-                    placeholder="Bio — who you are, what events you run"
-                    rows={4}
-                    value={profileForm.hostBio}
-                    onChange={(e) => setProfileForm((current) => ({ ...current, hostBio: e.target.value }))}
-                    className="host-bio-textarea"
-                  />
-                  <input
-                    placeholder="Website URL"
-                    value={profileForm.websiteUrl}
-                    onChange={(e) => setProfileForm((current) => ({ ...current, websiteUrl: e.target.value }))}
-                  />
-                  <input
-                    placeholder="X (Twitter) URL"
-                    value={profileForm.twitterUrl}
-                    onChange={(e) => setProfileForm((current) => ({ ...current, twitterUrl: e.target.value }))}
-                  />
-                  <input
-                    placeholder="Instagram URL"
-                    value={profileForm.instagramUrl}
-                    onChange={(e) => setProfileForm((current) => ({ ...current, instagramUrl: e.target.value }))}
-                  />
-                  <button className="ghost-button" type="button" onClick={saveProfile}>
-                    Save host profile
-                  </button>
-                </div>
-              ) : null}
-              {userRoles.includes("admin") ? (
-                <div className="admin-console-card">
-                  <p className="card-label">Admin directory</p>
-                  <p className="auth-note">
-                    List any event or user account. Force-cancel sends attendee cancellation emails when SMTP is enabled.
-                  </p>
-                  <button type="button" className="ghost-button" onClick={() => void loadAdminSnapshot()}>
-                    Load / refresh directory
-                  </button>
-                  {adminSnapshotLoaded ? (
-                    <>
-                      <h3 className="analytics-table-heading admin-console-subhead">Events (latest 200)</h3>
-                      <ul className="admin-dir-list">
-                        {adminEvents.map((ev) => (
-                          <li key={ev._id} className="admin-dir-row">
-                            <div>
-                              <strong>{ev.title}</strong>
-                              <p className="auth-note">
-                                {formatDate(ev.date)}
-                                {ev.city ? ` · ${ev.city}` : ""} · host {ev.organiserId?.email || "—"}
-                                {ev.cancelledAt ? " · cancelled" : ""}
-                              </p>
-                            </div>
-                            {!ev.cancelledAt ? (
-                              <button type="button" className="ghost-button compact-button" onClick={() => adminCancelEvent(ev._id)}>
-                                Cancel event
-                              </button>
-                            ) : (
-                              <span className="pill pill--warn">Cancelled</span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                      <h3 className="analytics-table-heading admin-console-subhead">Users (latest 150)</h3>
-                      <ul className="admin-dir-list admin-dir-list--users">
-                        {adminUsers.map((u) => (
-                          <li key={u._id} className="admin-dir-row">
-                            <div>
-                              <strong>{u.name || "—"}</strong>
-                              <p className="auth-note">
-                                {u.email} · {(u.roles?.length ? u.roles : u.role ? [u.role] : []).join(", ") || "—"}
-                                {u.emailVerified ? " · verified" : ""}
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <form className="stack-form auth-form" onSubmit={handleAuthSubmit}>
-              {renderGuestAuthFormFields()}
-
-              <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
-                {authMode === "login"
-                  ? "Login"
-                  : authMode === "signup"
-                    ? "Create account"
-                    : authMode === "forgot"
-                      ? "Send reset mail"
-                      : "Update password"}
-              </PrimaryButton>
-
-              {authMode === "login" && (
-                <div className="auth-links">
-                  <button type="button" onClick={() => setAuthMode("forgot")}>
-                    Forgot password?
-                  </button>
-                  <button type="button" onClick={resendVerification}>
-                    Resend verify email
-                  </button>
-                </div>
-              )}
-
-              {authMode === "signup" && <p className="auth-note">We will email a verification link before login is enabled.</p>}
-              {authMode === "forgot" && <p className="auth-note">Enter your account email and we will send a reset link.</p>}
-              {authMode === "reset" && <p className="auth-note">Set a fresh password from the secure reset link.</p>}
-            </form>
-          )}
-        </section>
-
-        {profileMode === "attendee" && recommendedEvents.length > 0 && (
-        <section id="ewe-recommended" className={panelClass("panel span-two full-width", ["attendee"])}>
-          <div className="section-head">
-            <h2>Recommended for you</h2>
-            <p className="section-note">Based on your past tickets and saved events.</p>
-          </div>
-          <div className="card-grid">
-            {recommendedEvents.map((event, index) => (
-              <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.07}s` }}>
-                <div
-                  className="event-cover"
-                  style={{
-                    backgroundImage: event.coverImage
-                      ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
-                      : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
-                  }}
-                >
-                  <span className="pill">{event.category}</span>
-                  {event.cancelledAt ? (
-                    <span className="pill pill--warn" style={{ marginLeft: 6 }}>
-                      Cancelled
-                    </span>
-                  ) : null}
-                </div>
-                <div className="event-content">
-                  <p className="card-label">Recommended</p>
-                  <h3>{event.title}</h3>
-                  <p>{event.description}</p>
-                    <div className="meta-list">
-                      <span>{formatDate(event.date)}</span>
-                      {event.city ? <span>{event.city}</span> : null}
-                      <span>{event.location}</span>
-                      {eventOrganiserRefId(event) ? (
-                        <span className="meta-host-line">
-                          by{" "}
-                          <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(event))}>
-                            {eventOrganiserDisplayName(event) || "Host"}
-                          </button>
-                        </span>
-                      ) : null}
-                    </div>
-                  {eventOrganiserTagline(event) ? (
-                    <p className="meta-host-tagline">{eventOrganiserTagline(event)}</p>
-                  ) : null}
-                  <div className="event-actions">
-                    <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
-                    <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
-                      {wishlistSet.has(String(event._id)) ? "Saved" : "Wishlist"}
+              {organisePath ? (
+                <>
+                  <div className="subpage-toolbar span-two full-width">
+                    <button type="button" className="ghost-button compact-button" onClick={goDiscover}>
+                      ← Discover
+                    </button>
+                    <button type="button" className="ghost-button compact-button" onClick={() => navigate("/check-in")}>
+                      Check-in & dashboards →
                     </button>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-        )}
-
-{profileMode === "attendee" && (
-        <section id="ewe-discover" className={panelClass("panel span-two full-width", ["attendee"])} ref={browseRef}>
-          <div className="section-head event-browser-head">
-            <h2>Browse events</h2>
-            <div className="filter-bar">
-              <input
-                className="search-input"
-                placeholder="Search by name, city, category..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                <option value="all">All categories</option>
-                <option value="Tech">Tech</option>
-                <option value="Music">Music</option>
-                <option value="Business">Business</option>
-                <option value="Workshop">Workshop</option>
-                <option value="Sports">Sports</option>
-                <option value="Art">Art</option>
-                <option value="Community">Community</option>
-              </select>
-              <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
-                <option value="all">Any date</option>
-                <option value="week">Next 7 days</option>
-                <option value="month">Next month</option>
-              </select>
-              <input
-                className="search-input"
-                placeholder="City"
-                value={cityFilter}
-                onChange={(e) => setCityFilter(e.target.value)}
-              />
-              <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)}>
-                <option value="all">Any price</option>
-                <option value="free">Free</option>
-                <option value="paid">Paid</option>
-              </select>
-            </div>
-          </div>
-
-          {eventsError ? (
-            <div className="api-error-banner" role="alert">
-              <div className="api-error-copy">
-                <strong>We could not load events</strong>
-                <p>{eventsError}</p>
-                <p className="api-error-hint">
-                  Confirm <code className="api-error-code">VITE_API_URL</code> on Vercel matches your Render web
-                  service URL plus <code className="api-error-code">/api</code> — use the hostname exactly as shown in
-                  Render (a typo or extra hyphen often returns 404).
-                </p>
-              </div>
-              <button type="button" className="api-error-retry" onClick={retryLoadEvents} disabled={eventsReloading}>
-                {eventsReloading ? "Retrying…" : "Try again"}
-              </button>
-            </div>
-          ) : null}
-
-          {!eventsError && filteredEvents.length === 0 ? (
-            <EmptyState
-              label="No events match these filters"
-              hint="Try clearing search, city, or date filters to see more listings."
-            />
-          ) : eventsError ? null : (
-            <div className="card-grid">
-              {filteredEvents.map((event, index) => (
-                <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.07}s` }}>
-                  <div
-                    className="event-cover"
-                    style={{
-                      backgroundImage: event.coverImage
-                        ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
-                        : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
-                    }}
-                  >
-                    <span className="pill">{event.category}</span>
-                    {event.cancelledAt ? (
-                      <span className="pill pill--warn" style={{ marginLeft: 6 }}>
-                        Cancelled
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="event-content">
-                    <p className="card-label">Featured event</p>
-                    <h3>{event.title}</h3>
-                    <p>{event.description}</p>
-                    <div className="meta-list">
-                      <span>{formatDate(event.date)}</span>
-                      {event.city ? <span>{event.city}</span> : null}
-                      <span>{event.location}</span>
-                      <span className="meta-host-line">
-                        by{" "}
-                        {eventOrganiserRefId(event) ? (
-                          <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(event))}>
-                            {eventOrganiserDisplayName(event) || "Organiser"}
-                          </button>
-                        ) : (
-                          "Organiser"
-                        )}
-                      </span>
+                  {!user ? (
+                    <div className="panel span-two full-width">
+                      <EmptyState
+                        label="Sign in to publish events"
+                        hint="Use an organiser or admin account to create ticketed events."
+                      />
+                      <PrimaryButton type="button" style={{ marginTop: 12 }} onClick={openAccount}>
+                        Sign in
+                      </PrimaryButton>
                     </div>
-                    {eventOrganiserTagline(event) ? (
-                      <p className="meta-host-tagline">{eventOrganiserTagline(event)}</p>
-                    ) : null}
-                    <div className="event-actions">
-                      <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
-                      <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
-                        {wishlistSet.has(String(event._id)) ? "Saved" : "Wishlist"}
-                      </button>
+                  ) : !isOrganiser ? (
+                    <div className="panel span-two full-width">
+                      <p className="auth-note">This account cannot publish events. Sign in with an organiser profile.</p>
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-        )}
-
-        {user && profileMode === "organiser" && (
-          <section id="ewe-organise" className={panelClass("panel span-two", ["organiser"])} ref={organiserRef}>
+                  ) : (
+                    <section id="ewe-organise" className={panelClass("panel span-two full-width", ["organiser"])} ref={organiserRef}>
             <div className="section-head">
               <h2>Create event</h2>
             </div>
@@ -4036,6 +3584,47 @@ export default function App() {
                 </button>
               </div>
 
+              <div className="promo-builder">
+                <p className="card-label">Pre-book / flash offer banner</p>
+                <p className="auth-note">
+                  Shown at the top of your public event page while active. Pair with discount codes or early-bird ticket prices. Set an end
+                  date to auto-hide the banner.
+                </p>
+                <label className="promo-builder-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(eventForm.bookingPromo?.active)}
+                    onChange={(e) => updateBookingPromo("active", e.target.checked)}
+                  />
+                  Show offer banner on event page
+                </label>
+                <input
+                  placeholder="Badge (e.g. 20% off · First 50)"
+                  value={eventForm.bookingPromo?.badge || ""}
+                  onChange={(e) => updateBookingPromo("badge", e.target.value)}
+                />
+                <input
+                  placeholder="Headline (required to show banner)"
+                  value={eventForm.bookingPromo?.headline || ""}
+                  onChange={(e) => updateBookingPromo("headline", e.target.value)}
+                />
+                <textarea
+                  rows="2"
+                  placeholder="Subtext (optional — e.g. Use code EARLY at checkout)"
+                  value={eventForm.bookingPromo?.subtext || ""}
+                  onChange={(e) => updateBookingPromo("subtext", e.target.value)}
+                />
+                <label className="auth-note">
+                  Offer ends (optional, local time)
+                  <input
+                    type="datetime-local"
+                    style={{ display: "block", marginTop: 6, width: "100%", maxWidth: 320 }}
+                    value={eventForm.bookingPromo?.endsAt || ""}
+                    onChange={(e) => updateBookingPromo("endsAt", e.target.value)}
+                  />
+                </label>
+              </div>
+
               <div className="two-column">
                 <textarea
                   rows="3"
@@ -4125,9 +3714,38 @@ export default function App() {
               </PrimaryButton>
             </form>
           </section>
-        )}
-        {user && (profileMode === "organiser" || profileMode === "checkin") && (
-          <>
+                  )}
+                </>
+              ) : null}
+              {checkinPath ? (
+                <>
+                  <div className="subpage-toolbar span-two full-width">
+                    <button type="button" className="ghost-button compact-button" onClick={goDiscover}>
+                      ← Discover
+                    </button>
+                    <button type="button" className="ghost-button compact-button" onClick={() => navigate("/organise")}>
+                      ← Create event
+                    </button>
+                  </div>
+                  {!user ? (
+                    <div className="panel span-two full-width">
+                      <EmptyState
+                        label="Sign in for check-in"
+                        hint="Hosts scan tickets here; door staff pick an assignment below after the host adds them."
+                      />
+                      <PrimaryButton type="button" style={{ marginTop: 12 }} onClick={openAccount}>
+                        Sign in
+                      </PrimaryButton>
+                    </div>
+                  ) : !(isOrganiser || staffMyEvents.length > 0) ? (
+                    <div className="panel span-two full-width">
+                      <p className="auth-note">
+                        Check-in tools are for event hosts. Door staff: ask your host to invite your account — then open this page to select
+                        your gate under Door staff assignments.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
             <section className={panelClass("panel", ["organiser", "checkin"])}>
               <div className="section-head">
                 <h2>Managed events</h2>
@@ -4142,7 +3760,7 @@ export default function App() {
                   ))}
                 </div>
               ) : (
-                <EmptyState label="No events yet - create one above" />
+                <EmptyState label="No events yet" hint="Publish a new event from Organise (/organise), then return here for dashboards and check-in." />
               )}
             </section>
 
@@ -4437,7 +4055,567 @@ export default function App() {
                 <EmptyState label="No feedback yet" />
               )}
             </section>
-          </>
+                    </>
+                  )}
+                </>
+              ) : null}
+
+            </main>
+          </div>
+        </div>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-root">
+      <a className="skip-link" href="#ewe-main">
+        Skip to workspace
+      </a>
+      <TopNav
+        user={user}
+        isOrganiser={isOrganiser}
+        profileMode={profileMode}
+        onGoDiscover={goDiscover}
+        onGoBook={goBook}
+        onGoTickets={goTickets}
+        onGoWishlist={goWishlist}
+        onGoOrganise={goOrganise}
+        onGoCheckIn={goCheckIn}
+        onGoStats={goStats}
+        showStatsLink={isAdminUser}
+        onOpenAccount={openAccount}
+        onLogout={logout}
+        notificationUnread={user ? unreadCount : 0}
+        onNotificationsToggle={() => setNotifOpen((o) => !o)}
+        notificationsOpen={notifOpen}
+        navActiveKey={navActiveKey}
+      />
+      {user && nextBookedEventCountdown ? (
+        <div className="countdown-strip" role="status">
+          <button
+            type="button"
+            className="countdown-strip__btn"
+            onClick={() => {
+              setNotifOpen(false);
+              handleSelectEvent(nextBookedEventCountdown.eid);
+            }}
+          >
+            <span className="countdown-strip__label">Next ticketed event</span>
+            <span className="countdown-strip__title">{nextBookedEventCountdown.title}</span>
+            <span className="countdown-strip__time">{formatMsAsCountdown(nextBookedEventCountdown.left)}</span>
+          </button>
+        </div>
+      ) : null}
+      <NotificationsPanel
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        notifications={notifications}
+        markRead={markRead}
+        markAllRead={markAllRead}
+        navigate={navigate}
+        flash={flash}
+        desktopSupported={desktopSupported}
+        desktopPermission={desktopPermission}
+        requestDesktopPermission={requestDesktopPermission}
+        ticketPreview={ticketNotificationsPreview}
+        followingHosts={followingHosts}
+        formatMsAsCountdown={formatMsAsCountdown}
+        formatDate={formatDate}
+      />
+      <div className="app-flow">
+        <div className="app-shell">
+          <header className="hero-panel">
+        <div className="hero-copy-block">
+          <p className="eyebrow">EventwithEase</p>
+          <p className="hero-kicker">Event publishing · Ticketing · Check-in</p>
+          <h1>
+            <span>Make your next</span>
+            <span className="hero-accent">event feel bigger</span>
+            <span>before it even starts.</span>
+          </h1>
+          <p className="hero-copy">
+            Organisers launch events, sell ticket types, and track turnout live. Attendees browse, book, carry a QR
+            pass, and walk in with a single scan.
+          </p>
+          <div className="hero-cta-row">
+            <PrimaryButton type="button" onClick={goDiscover}>
+              Browse events
+            </PrimaryButton>
+            <button type="button" className="hero-cta-secondary" onClick={goOrganise}>
+              Host an event
+            </button>
+          </div>
+          <p className="hero-trust">Sandbox payments · Per-ticket QR · CSV export · Refund workflow</p>
+          <div className="hero-strip">
+            {[
+              { mode: "organiser", label: "Organiser", sub: "Create events · Monitor revenue" },
+              { mode: "attendee", label: "Attendee", sub: "Book tickets · QR entry" },
+              { mode: "checkin", label: "Check-in", sub: "Mark attendance in seconds" },
+            ].map(({ mode, label, sub }) => (
+              <button
+                type="button"
+                className={`hero-chip hero-chip-button${profileMode === mode ? " is-active" : ""}`}
+                key={label}
+                onClick={() => focusProfileMode(mode)}
+              >
+                <strong>{label}</strong>
+                <span>{sub}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="hero-stats">
+          {[
+            { value: events.length, label: "Live events" },
+            { value: myTickets.length, label: "Your tickets" },
+            { value: myEvents.length, label: "Managed events" },
+          ].map(({ value, label }) => (
+            <div className="hero-stat-card" key={label}>
+              <strong>
+                <AnimatedNumber value={value} />
+              </strong>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      </header>
+
+      {statusMessage && <div className="banner success">{statusMessage}</div>}
+      {errorMessage && <div className="banner error">{errorMessage}</div>}
+
+      <main id="ewe-main" className="grid-layout">
+        <section
+          id="ewe-account"
+          className={panelClass("panel auth-panel full-width", ["organiser", "checkin"])}
+          ref={authRef}
+        >
+          <div className="section-head auth-head">
+            <h2>
+              {user
+                ? `Hello, ${user.name.split(" ")[0]}`
+                : authMode === "forgot"
+                  ? "Reset password"
+                  : authMode === "reset"
+                    ? "New password"
+                    : authMode === "signup"
+                      ? "Create account"
+                      : "Sign in"}
+            </h2>
+            {user ? (
+              <button className="ghost-button" onClick={logout}>
+                Logout
+              </button>
+            ) : authMode === "forgot" || authMode === "reset" ? (
+              <button className="ghost-button compact-button" type="button" onClick={() => setAuthMode("login")}>
+                Back
+              </button>
+            ) : (
+              <div className="switch-row">
+                <button className={`tab${authMode === "login" ? " active" : ""}`} type="button" onClick={() => setAuthMode("login")}>
+                  Login
+                </button>
+                <button className={`tab${authMode === "signup" ? " active" : ""}`} type="button" onClick={() => setAuthMode("signup")}>
+                  Signup
+                </button>
+              </div>
+            )}
+          </div>
+
+          {user ? (
+            <div className="user-card">
+              <p className="card-label">Signed in as</p>
+              <p className="user-email">{user.email}</p>
+              <span className="pill">{userRoles.join(" + ")}</span>
+              {fanProgress ? (
+                <div className="fan-progress-card" aria-label="Your event explorer progress">
+                  <div className="fan-progress-head">
+                    <span className="fan-level-badge">Lv {fanProgress.level}</span>
+                    <span className="fan-progress-title">Event explorer</span>
+                    <span className="fan-progress-xp">{fanProgress.score} XP</span>
+                  </div>
+                  <div className="fan-progress-track" title={`Next level at ${fanProgress.levelEnd} XP`}>
+                    <div className="fan-progress-fill" style={{ width: `${fanProgress.pct}%` }} />
+                  </div>
+                  <div className="fan-patron-block" aria-label="Patron progress from ticket spend">
+                    <div className="fan-patron-head">
+                      <span className="fan-patron-title">Patron power</span>
+                      <span className="fan-patron-rank">{fanProgress.patronLabel}</span>
+                      <span className="fan-patron-spend">{formatCurrency(fanProgress.totalSpend)} on active tickets</span>
+                    </div>
+                    <div className="fan-patron-track-wrap">
+                      <div className="fan-patron-track" role="presentation">
+                        <div className="fan-patron-track-fill" style={{ width: `${fanProgress.patronBarPct}%` }} />
+                        {fanProgress.patronTicks.map((tk) => (
+                          <span
+                            key={tk.amt}
+                            className="fan-patron-tick"
+                            style={{ left: `${tk.leftPct}%` }}
+                            title={formatCurrency(tk.amt)}
+                          />
+                        ))}
+                      </div>
+                      <div className="fan-patron-scale" aria-hidden>
+                        <span>0</span>
+                        <span>{formatCurrency(PATRON_SPEND_TIERS[4])}</span>
+                      </div>
+                    </div>
+                    {fanProgress.patronNextHint ? <p className="fan-patron-next">{fanProgress.patronNextHint}</p> : null}
+                    {fanProgress.perkChips.length ? (
+                      <ul className="fan-perk-chips">
+                        {fanProgress.perkChips.map((p) => (
+                          <li key={p.key} className="fan-perk-chip">
+                            {p.label}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  <p className="auth-note fan-progress-hint">
+                    Level XP: +45 per active ticket · +12 wishlist saves · +20 per host you follow · bonus stacks at 2 / 3 /
+                    5 / 10 / 20 tickets · +1 XP per ₹100 spent (cap 340) · extra bursts at ₹500 / ₹2.5k / ₹10k / ₹25k.
+                  </p>
+                </div>
+              ) : null}
+              <div className="profile-switch">
+                <button
+                  className={`tab${profileMode === "attendee" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => focusProfileMode("attendee")}
+                >
+                  Attendee
+                </button>
+                <button
+                  className={`tab${profileMode === "organiser" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => focusProfileMode("organiser")}
+                >
+                  Organiser
+                </button>
+                <button
+                  className={`tab${profileMode === "checkin" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => focusProfileMode("checkin")}
+                >
+                  Check-in
+                </button>
+              </div>
+              <div className="networking-card">
+                <p className="card-label">Networking profile</p>
+                <label className="networking-toggle">
+                  <input
+                    type="checkbox"
+                    checked={profileForm.networkingOptIn}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
+                  />
+                  Share my LinkedIn with fellow attendees
+                </label>
+                <input
+                  placeholder="LinkedIn URL"
+                  value={profileForm.linkedinUrl}
+                  onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
+                />
+                <button className="ghost-button" type="button" onClick={saveProfile}>
+                  Save networking profile
+                </button>
+              </div>
+              {isOrganiser && profileMode !== "attendee" ? (
+                <div className="host-profile-card">
+                  <p className="card-label">Public host profile</p>
+                  <p className="auth-note">
+                    Shown on your <strong>/host/…</strong> page and helps attendees trust you. You can still use the same account to buy
+                    tickets.
+                  </p>
+                  <input
+                    placeholder="Short tagline (e.g. Indie gigs · Mumbai)"
+                    value={profileForm.hostTagline}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, hostTagline: e.target.value }))}
+                  />
+                  <textarea
+                    placeholder="Bio — who you are, what events you run"
+                    rows={4}
+                    value={profileForm.hostBio}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, hostBio: e.target.value }))}
+                    className="host-bio-textarea"
+                  />
+                  <input
+                    placeholder="Website URL"
+                    value={profileForm.websiteUrl}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, websiteUrl: e.target.value }))}
+                  />
+                  <input
+                    placeholder="X (Twitter) URL"
+                    value={profileForm.twitterUrl}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, twitterUrl: e.target.value }))}
+                  />
+                  <input
+                    placeholder="Instagram URL"
+                    value={profileForm.instagramUrl}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, instagramUrl: e.target.value }))}
+                  />
+                  <button className="ghost-button" type="button" onClick={saveProfile}>
+                    Save host profile
+                  </button>
+                </div>
+              ) : null}
+              {userRoles.includes("admin") ? (
+                <div className="admin-console-card">
+                  <p className="card-label">Admin directory</p>
+                  <p className="auth-note">
+                    List any event or user account. Force-cancel sends attendee cancellation emails when SMTP is enabled.
+                  </p>
+                  <button type="button" className="ghost-button" onClick={() => void loadAdminSnapshot()}>
+                    Load / refresh directory
+                  </button>
+                  {adminSnapshotLoaded ? (
+                    <>
+                      <h3 className="analytics-table-heading admin-console-subhead">Events (latest 200)</h3>
+                      <ul className="admin-dir-list">
+                        {adminEvents.map((ev) => (
+                          <li key={ev._id} className="admin-dir-row">
+                            <div>
+                              <strong>{ev.title}</strong>
+                              <p className="auth-note">
+                                {formatDate(ev.date)}
+                                {ev.city ? ` · ${ev.city}` : ""} · host {ev.organiserId?.email || "—"}
+                                {ev.cancelledAt ? " · cancelled" : ""}
+                              </p>
+                            </div>
+                            {!ev.cancelledAt ? (
+                              <button type="button" className="ghost-button compact-button" onClick={() => adminCancelEvent(ev._id)}>
+                                Cancel event
+                              </button>
+                            ) : (
+                              <span className="pill pill--warn">Cancelled</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <h3 className="analytics-table-heading admin-console-subhead">Users (latest 150)</h3>
+                      <ul className="admin-dir-list admin-dir-list--users">
+                        {adminUsers.map((u) => (
+                          <li key={u._id} className="admin-dir-row">
+                            <div>
+                              <strong>{u.name || "—"}</strong>
+                              <p className="auth-note">
+                                {u.email} · {(u.roles?.length ? u.roles : u.role ? [u.role] : []).join(", ") || "—"}
+                                {u.emailVerified ? " · verified" : ""}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <form className="stack-form auth-form" onSubmit={handleAuthSubmit}>
+              {renderGuestAuthFormFields()}
+
+              <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
+                {authMode === "login"
+                  ? "Login"
+                  : authMode === "signup"
+                    ? "Create account"
+                    : authMode === "forgot"
+                      ? "Send reset mail"
+                      : "Update password"}
+              </PrimaryButton>
+
+              {authMode === "login" && (
+                <div className="auth-links">
+                  <button type="button" onClick={() => setAuthMode("forgot")}>
+                    Forgot password?
+                  </button>
+                  <button type="button" onClick={resendVerification}>
+                    Resend verify email
+                  </button>
+                </div>
+              )}
+
+              {authMode === "signup" && <p className="auth-note">We will email a verification link before login is enabled.</p>}
+              {authMode === "forgot" && <p className="auth-note">Enter your account email and we will send a reset link.</p>}
+              {authMode === "reset" && <p className="auth-note">Set a fresh password from the secure reset link.</p>}
+            </form>
+          )}
+        </section>
+
+        {profileMode === "attendee" && recommendedEvents.length > 0 && (
+        <section id="ewe-recommended" className={panelClass("panel span-two full-width", ["attendee"])}>
+          <div className="section-head">
+            <h2>Recommended for you</h2>
+            <p className="section-note">Based on your past tickets and saved events.</p>
+          </div>
+          <div className="card-grid">
+            {recommendedEvents.map((event, index) => (
+              <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.07}s` }}>
+                <div
+                  className="event-cover"
+                  style={{
+                    backgroundImage: event.coverImage
+                      ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
+                      : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                  }}
+                >
+                  <span className="pill">{event.category}</span>
+                  {event.cancelledAt ? (
+                    <span className="pill pill--warn" style={{ marginLeft: 6 }}>
+                      Cancelled
+                    </span>
+                  ) : null}
+                </div>
+                <div className="event-content">
+                  <p className="card-label">Recommended</p>
+                  <h3>{event.title}</h3>
+                  <p>{event.description}</p>
+                    <div className="meta-list">
+                      <span>{formatDate(event.date)}</span>
+                      {event.city ? <span>{event.city}</span> : null}
+                      <span>{event.location}</span>
+                      {eventOrganiserRefId(event) ? (
+                        <span className="meta-host-line">
+                          by{" "}
+                          <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(event))}>
+                            {eventOrganiserDisplayName(event) || "Host"}
+                          </button>
+                        </span>
+                      ) : null}
+                    </div>
+                  {eventOrganiserTagline(event) ? (
+                    <p className="meta-host-tagline">{eventOrganiserTagline(event)}</p>
+                  ) : null}
+                  <div className="event-actions">
+                    <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
+                    <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
+                      {wishlistSet.has(String(event._id)) ? "Saved" : "Wishlist"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+        )}
+
+{profileMode === "attendee" && (
+        <section id="ewe-discover" className={panelClass("panel span-two full-width", ["attendee"])} ref={browseRef}>
+          <div className="section-head event-browser-head">
+            <h2>Browse events</h2>
+            <div className="filter-bar">
+              <input
+                className="search-input"
+                placeholder="Search by name, city, category..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                <option value="all">All categories</option>
+                <option value="Tech">Tech</option>
+                <option value="Music">Music</option>
+                <option value="Business">Business</option>
+                <option value="Workshop">Workshop</option>
+                <option value="Sports">Sports</option>
+                <option value="Art">Art</option>
+                <option value="Community">Community</option>
+              </select>
+              <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
+                <option value="all">Any date</option>
+                <option value="week">Next 7 days</option>
+                <option value="month">Next month</option>
+              </select>
+              <input
+                className="search-input"
+                placeholder="City"
+                value={cityFilter}
+                onChange={(e) => setCityFilter(e.target.value)}
+              />
+              <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)}>
+                <option value="all">Any price</option>
+                <option value="free">Free</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
+          </div>
+
+          {eventsError ? (
+            <div className="api-error-banner" role="alert">
+              <div className="api-error-copy">
+                <strong>We could not load events</strong>
+                <p>{eventsError}</p>
+                <p className="api-error-hint">
+                  Confirm <code className="api-error-code">VITE_API_URL</code> on Vercel matches your Render web
+                  service URL plus <code className="api-error-code">/api</code> — use the hostname exactly as shown in
+                  Render (a typo or extra hyphen often returns 404).
+                </p>
+              </div>
+              <button type="button" className="api-error-retry" onClick={retryLoadEvents} disabled={eventsReloading}>
+                {eventsReloading ? "Retrying…" : "Try again"}
+              </button>
+            </div>
+          ) : null}
+
+          {!eventsError && filteredEvents.length === 0 ? (
+            <EmptyState
+              label="No events match these filters"
+              hint="Try clearing search, city, or date filters to see more listings."
+            />
+          ) : eventsError ? null : (
+            <div className="card-grid">
+              {filteredEvents.map((event, index) => (
+                <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.07}s` }}>
+                  <div
+                    className="event-cover"
+                    style={{
+                      backgroundImage: event.coverImage
+                        ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
+                        : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                    }}
+                  >
+                    <span className="pill">{event.category}</span>
+                    {event.cancelledAt ? (
+                      <span className="pill pill--warn" style={{ marginLeft: 6 }}>
+                        Cancelled
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="event-content">
+                    <p className="card-label">Featured event</p>
+                    <h3>{event.title}</h3>
+                    <p>{event.description}</p>
+                    <div className="meta-list">
+                      <span>{formatDate(event.date)}</span>
+                      {event.city ? <span>{event.city}</span> : null}
+                      <span>{event.location}</span>
+                      <span className="meta-host-line">
+                        by{" "}
+                        {eventOrganiserRefId(event) ? (
+                          <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(event))}>
+                            {eventOrganiserDisplayName(event) || "Organiser"}
+                          </button>
+                        ) : (
+                          "Organiser"
+                        )}
+                      </span>
+                    </div>
+                    {eventOrganiserTagline(event) ? (
+                      <p className="meta-host-tagline">{eventOrganiserTagline(event)}</p>
+                    ) : null}
+                    <div className="event-actions">
+                      <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
+                      <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
+                        {wishlistSet.has(String(event._id)) ? "Saved" : "Wishlist"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
         )}
       </main>
     </div>

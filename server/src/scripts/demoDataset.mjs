@@ -102,6 +102,13 @@ export const demoEvents = [
     faq: [{ question: "Laptop required?", answer: "Optional for the hack corner; talks are listen-only friendly." }],
     venueMapUrl: "https://maps.google.com/?q=IIIT+Hyderabad",
     discountCodes: [{ code: "BUILD20", type: "percent", value: 20, expiresAt: "2025-11-01" }],
+    /** `endsAt` is set at seed time from the event date so the banner stays valid with rolling dates. */
+    bookingPromo: {
+      active: true,
+      badge: "Pre-book",
+      headline: "Flash pre-book window — stack with BUILD20",
+      subtext: "Limited supporter seats; offer rolls off shortly before doors.",
+    },
     ticketTypes: [
       { name: "General", price: 0, quantity: 300 },
       { name: "Supporter", price: 499, earlyBirdPrice: 349, earlyBirdEndsAt: "2025-11-01", quantity: 120 },
