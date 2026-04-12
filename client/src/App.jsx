@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import api from "./api";
@@ -62,8 +62,18 @@ function NotificationsPanel({
   desktopSupported,
   desktopPermission,
   requestDesktopPermission,
+  ticketPreview = [],
+  followingHosts = [],
+  formatMsAsCountdown: fmtCountdown,
+  formatDate: fmtDate,
 }) {
   if (!open) return null;
+
+  function goEventFromPanel(eid) {
+    onClose();
+    navigate(`/event/${eid}`);
+  }
+
   return (
     <>
       <button type="button" className="notif-backdrop" aria-label="Close notifications" onClick={onClose} />
@@ -96,12 +106,62 @@ function NotificationsPanel({
           </div>
         </div>
         <p className="notif-panel-hint">
-          Reminders use your saved tickets and wishlist. Open the app before your event so timers can run (mobile browsers may limit
-          background alerts).
+          Milestone alerts (this week, 24h, 1h, etc.) fire while this tab is open. Your ticket list below always shows countdowns. Followed
+          hosts trigger alerts when they add new upcoming events.
         </p>
+
+        {ticketPreview.length > 0 ? (
+          <div className="notif-section">
+            <h3 className="notif-section-title">Your ticketed events</h3>
+            <ul className="notif-preview-list">
+              {ticketPreview.map((row) => (
+                <li key={row.eid} className="notif-preview-item">
+                  <button type="button" className="notif-preview-main" onClick={() => goEventFromPanel(row.eid)}>
+                    <strong>{row.title}</strong>
+                    {row.cancelled ? (
+                      <span className="notif-preview-sub notif-preview-warn">Cancelled — check refunds or email.</span>
+                    ) : (
+                      <>
+                        <span className="notif-preview-sub">
+                          Starts {fmtDate(row.startsAt)} · <em>{fmtCountdown(row.leftMs)}</em> from now
+                        </span>
+                        <span className="notif-preview-sub notif-preview-muted">
+                          You can request to cancel a booking until the event time (paid tickets may go through a refund review).
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="notif-section">
+          <h3 className="notif-section-title">Hosts you follow</h3>
+          {followingHosts.length > 0 ? (
+            <p className="notif-follow-summary">
+              Following <strong>{followingHosts.length}</strong> host{followingHosts.length === 1 ? "" : "s"}:{" "}
+              {followingHosts.map((h) => h.name).join(", ")}. New upcoming events from them appear as alerts here.
+            </p>
+          ) : (
+            <p className="auth-note notif-follow-empty">
+              Open any event, click the host name, then <strong>Follow</strong>. When they publish a new date, you will get an in-app alert
+              (first time you load after it appears).
+            </p>
+          )}
+        </div>
+
+        <h3 className="notif-section-title notif-alerts-heading">Milestone alerts</h3>
         <ul className="notif-list">
-          {notifications.length === 0 ? (
-            <li className="auth-note notif-empty">No alerts yet. Book a ticket or save events for early-bird and start-time reminders.</li>
+          {notifications.length === 0 && ticketPreview.length === 0 ? (
+            <li className="auth-note notif-empty">
+              No fired reminders yet. After you book, you will see week-of and day-before alerts when those windows arrive — plus early-bird
+              nudges for wishlisted events.
+            </li>
+          ) : null}
+          {notifications.length === 0 && ticketPreview.length > 0 ? (
+            <li className="auth-note notif-empty">No milestone alerts in your inbox yet — your countdowns are in the list above.</li>
           ) : null}
           {notifications.map((n) => (
             <li key={n.id} className={`notif-item${n.read ? " is-read" : ""}`}>
@@ -156,6 +216,7 @@ export default function App() {
   const [descriptionOutline, setDescriptionOutline] = useState("");
   const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]"));
   const [notifOpen, setNotifOpen] = useState(false);
+  const [followingHosts, setFollowingHosts] = useState([]);
   const [countdownNow, setCountdownNow] = useState(() => Date.now());
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -184,6 +245,19 @@ export default function App() {
   const authRoleRef = useRef(authForm.role);
   const lastOpenedEventIdRef = useRef("");
 
+  const refreshFollowing = useCallback(async () => {
+    if (!user) {
+      setFollowingHosts([]);
+      return;
+    }
+    try {
+      const { data } = await api.get("/organisers/following");
+      setFollowingHosts(Array.isArray(data) ? data : []);
+    } catch {
+      setFollowingHosts([]);
+    }
+  }, [user]);
+
   const {
     notifications,
     unreadCount,
@@ -192,12 +266,20 @@ export default function App() {
     requestDesktopPermission,
     desktopSupported,
     desktopPermission,
-  } = useEventNotifications({ user, myTickets, events, wishlist });
+  } = useEventNotifications({ user, myTickets, events, wishlist, followingList: followingHosts });
 
   useEffect(() => {
     const id = setInterval(() => setCountdownNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    refreshFollowing();
+  }, [refreshFollowing, user?.id]);
+
+  useEffect(() => {
+    if (user && notifOpen) refreshFollowing();
+  }, [user, notifOpen, refreshFollowing]);
 
   const userRoles = user?.roles?.length ? user.roles : user?.role ? [user.role] : [];
   const isOrganiser = userRoles.includes("organiser") || userRoles.includes("admin");
@@ -247,9 +329,32 @@ export default function App() {
     }
     if (!best) return null;
     const left = best.start - now;
-    if (left > 72 * 60 * 60 * 1000) return null;
     return { ...best, left };
   }, [myTickets, events, countdownNow]);
+
+  const ticketNotificationsPreview = useMemo(() => {
+    if (!user || !myTickets.length) return [];
+    const seen = new Set();
+    const rows = [];
+    const now = countdownNow;
+    for (const t of myTickets) {
+      const eid = String(t.eventId?._id || t.eventId || "");
+      if (!eid || seen.has(eid)) continue;
+      seen.add(eid);
+      const ev = events.find((e) => String(e._id) === eid) || t.eventId;
+      if (!ev?.date) continue;
+      const start = new Date(ev.date).getTime();
+      if (Number.isNaN(start) || start <= now) continue;
+      rows.push({
+        eid,
+        title: ev.title || "Event",
+        startsAt: ev.date,
+        leftMs: start - now,
+        cancelled: Boolean(ev.cancelledAt || t.eventId?.cancelledAt),
+      });
+    }
+    return rows.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()).slice(0, 12);
+  }, [user, myTickets, events, countdownNow]);
 
   const hasSelectedBooking = useMemo(() => {
     if (!selectedEvent) return false;
@@ -1605,10 +1710,12 @@ export default function App() {
         const { data } = await api.delete(`/organisers/${organiserId}/follow`);
         setHostPage((p) => (p ? { ...p, following: false, followerCount: data.followerCount } : p));
         flash("Unfollowed host.");
+        await refreshFollowing();
       } else {
         const { data } = await api.post(`/organisers/${organiserId}/follow`);
         setHostPage((p) => (p ? { ...p, following: true, followerCount: data.followerCount } : p));
         flash("You follow this host — their events stay easy to find on Discover.");
+        await refreshFollowing();
       }
     } catch (e) {
       flash(e.response?.data?.message || "Could not update follow.", true);
@@ -1674,6 +1781,10 @@ export default function App() {
           desktopSupported={desktopSupported}
           desktopPermission={desktopPermission}
           requestDesktopPermission={requestDesktopPermission}
+          ticketPreview={ticketNotificationsPreview}
+          followingHosts={followingHosts}
+          formatMsAsCountdown={formatMsAsCountdown}
+          formatDate={formatDate}
         />
         <div className="app-flow">
           <div className="app-shell host-profile-page" id="ewe-host">
@@ -1869,6 +1980,10 @@ export default function App() {
         desktopSupported={desktopSupported}
         desktopPermission={desktopPermission}
         requestDesktopPermission={requestDesktopPermission}
+        ticketPreview={ticketNotificationsPreview}
+        followingHosts={followingHosts}
+        formatMsAsCountdown={formatMsAsCountdown}
+        formatDate={formatDate}
       />
       <div className="app-flow">
         <div className="app-shell">
@@ -2798,25 +2913,43 @@ export default function App() {
         <section id="ewe-tickets" className={panelClass("panel", ["attendee"])} ref={ticketsRef}>
           <div className="section-head">
             <h2>Your QR tickets</h2>
+            <p className="section-note">Live countdown and cancel window show here once events are loaded. Open the bell menu for the same list plus host-follow alerts.</p>
           </div>
           <div className="ticket-stack">
             {myTickets.length ? (
               myTickets.map((ticket, index) => {
+                const eid = String(ticket.eventId?._id || ticket.eventId || "");
+                const evMerged = (eid && events.find((e) => String(e._id) === eid)) || ticket.eventId;
+                const eventDateVal = evMerged?.date;
                 const isLeadTicket =
                   myTickets.findIndex((t) => String(t.bookingId) === String(ticket.bookingId)) === index;
-                const eventNotStarted = ticket.eventId?.date && new Date(ticket.eventId.date) > new Date();
+                const eventNotStarted = eventDateVal && new Date(eventDateVal) > new Date();
+                const startMs = eventDateVal ? new Date(eventDateVal).getTime() : NaN;
+                const untilStart = Number.isFinite(startMs) ? Math.max(0, startMs - countdownNow) : null;
                 const canCancelBooking =
                   isLeadTicket &&
                   eventNotStarted &&
                   ticket.status === "booked" &&
-                  !refundsByBooking[ticket.bookingId];
+                  !refundsByBooking[ticket.bookingId] &&
+                  !evMerged?.cancelledAt;
 
                 return (
                 <article className="ticket-card" key={ticket._id} style={{ animationDelay: `${index * 0.08}s` }}>
                   <div>
                     <p className="card-label">Ticket ready</p>
-                    <h3>{ticket.eventId?.title}</h3>
+                    <h3>{evMerged?.title || ticket.eventId?.title}</h3>
                     <p>{ticket.ticketTypeName}</p>
+                    {eventNotStarted && untilStart != null ? (
+                      <p className="ticket-countdown-line" role="status">
+                        <strong>{formatMsAsCountdown(untilStart)}</strong> until doors · {formatDate(eventDateVal)}
+                      </p>
+                    ) : null}
+                    {canCancelBooking ? (
+                      <p className="auth-note ticket-cancel-hint">
+                        Cancellation: you can cancel this booking until the event time. Paid tickets may require organiser approval for a
+                        refund.
+                      </p>
+                    ) : null}
                     <div className="meta-list ticket-meta-list">
                       <span className="ticket-code">{ticket.ticketCode}</span>
                       <span className={`ticket-status ${ticket.status === "checked-in" ? "is-checked-in" : ""}`}>
@@ -2833,7 +2966,7 @@ export default function App() {
                         Cancel booking
                       </button>
                     )}
-                    {ticket.eventId?.date && new Date(ticket.eventId.date) < new Date() && ticket.eventId?._id ? (
+                    {eventDateVal && new Date(eventDateVal) < new Date() && (evMerged?._id || eid) ? (
                       <div className="ticket-feedback-hint">
                         <p className="auth-note">
                           After the event: leave a <strong>public review</strong> and <strong>private feedback</strong> for the organiser on the
@@ -2842,7 +2975,7 @@ export default function App() {
                         <button
                           type="button"
                           className="ghost-button"
-                          onClick={() => handleSelectEvent(ticket.eventId._id || ticket.eventId)}
+                          onClick={() => handleSelectEvent(evMerged?._id || eid)}
                         >
                           Open event — review & feedback
                         </button>

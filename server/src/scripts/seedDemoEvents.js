@@ -37,6 +37,7 @@ async function seedDemoEvents() {
     const hashedPassword = await bcrypt.hash(password, 10);
     organiser = await User.create({ ...rest, password: hashedPassword, emailVerified: true });
   } else {
+    organiser.name = demoOrganiser.name;
     organiser.hostBio = demoOrganiser.hostBio || organiser.hostBio;
     organiser.hostTagline = demoOrganiser.hostTagline || organiser.hostTagline;
     organiser.linkedinUrl = demoOrganiser.linkedinUrl || organiser.linkedinUrl;

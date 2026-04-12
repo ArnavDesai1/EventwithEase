@@ -2,6 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const INBOX_KEY = "ewe-notif-inbox-v1";
 const FIRED_KEY = "ewe-notif-fired-v1";
+const FOLLOW_SNAP_KEY = "ewe-follow-event-snapshot-v1";
+
+function organiserIdFromEvent(ev) {
+  const o = ev?.organiserId;
+  if (o == null || o === "") return null;
+  if (typeof o === "string") return o;
+  const id = o._id ?? o.id;
+  return id != null ? String(id) : null;
+}
 
 function loadJson(key, fallback) {
   try {
@@ -39,7 +48,7 @@ export function formatMsAsCountdown(ms) {
   return `${sec}s`;
 }
 
-export function useEventNotifications({ user, myTickets, events, wishlist }) {
+export function useEventNotifications({ user, myTickets, events, wishlist, followingList = [] }) {
   const [inbox, setInbox] = useState(() => loadJson(INBOX_KEY, []));
   const firedRef = useRef(new Set(loadJson(FIRED_KEY, [])));
 
@@ -128,8 +137,60 @@ export function useEventNotifications({ user, myTickets, events, wishlist }) {
             body: `${ev.title} — ${formatMsAsCountdown(delta)} to go.`,
             link: `/event/${eid}`,
           });
+        } else if (delta <= 7 * 24 * 60 * 60 * 1000) {
+          fire(`w7:${eid}`, {
+            id: `w7:${eid}`,
+            title: "Event this week",
+            body: `${ev.title} — ${formatMsAsCountdown(delta)} until doors.`,
+            link: `/event/${eid}`,
+          });
         }
       }
+
+      const snap = loadJson(FOLLOW_SNAP_KEY, {});
+      let snapDirty = false;
+      const followingIds = new Set(followingList.map((f) => String(f.organiserId)));
+      const nameByOrganiser = new Map(followingList.map((f) => [String(f.organiserId), f.name || "Host"]));
+
+      for (const oid of followingIds) {
+        const futureForHost = events.filter((ev) => {
+          const eoid = organiserIdFromEvent(ev);
+          if (String(eoid) !== String(oid)) return false;
+          const st = ev?.date ? new Date(ev.date).getTime() : NaN;
+          return Number.isFinite(st) && st > now;
+        });
+        const ids = futureForHost.map((ev) => String(ev._id)).sort();
+        const prev = snap[oid];
+        if (!Array.isArray(prev)) {
+          snap[oid] = ids;
+          snapDirty = true;
+        } else {
+          const prevSet = new Set(prev);
+          for (const ev of futureForHost) {
+            const eid = String(ev._id);
+            if (prevSet.has(eid)) continue;
+            fire(`follownew:${eid}`, {
+              id: `follownew:${eid}`,
+              title: `New from ${nameByOrganiser.get(String(oid)) || "a host you follow"}`,
+              body: ev.title,
+              link: `/event/${eid}`,
+            });
+          }
+          if (ids.length !== prev.length || ids.some((id, i) => id !== prev[i])) {
+            snap[oid] = ids;
+            snapDirty = true;
+          }
+        }
+      }
+
+      for (const key of Object.keys(snap)) {
+        if (!followingIds.has(key)) {
+          delete snap[key];
+          snapDirty = true;
+        }
+      }
+
+      if (snapDirty) saveJson(FOLLOW_SNAP_KEY, snap);
 
       const wishSet = new Set(wishlist.map(String));
       for (const eid of wishSet) {
@@ -155,7 +216,7 @@ export function useEventNotifications({ user, myTickets, events, wishlist }) {
     run();
     const id = setInterval(run, 30000);
     return () => clearInterval(id);
-  }, [user, myTickets, events, wishlist, fire]);
+  }, [user, myTickets, events, wishlist, followingList, fire]);
 
   const unreadCount = useMemo(() => inbox.filter((x) => !x.read).length, [inbox]);
 
