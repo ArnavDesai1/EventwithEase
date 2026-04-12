@@ -3800,54 +3800,66 @@ export default function App() {
               className={panelClass("panel span-two full-width", ["checkin", "organiser"])}
               ref={checkinRef}
             >
-              <div className="section-head">
-                <h2>Check-in dashboard</h2>
-                <p className="section-note">
-                  <strong>Who scans:</strong> the <strong>host</strong> (organiser) or <strong>door staff</strong> accounts the host
-                  invited. Select the event under <strong>Managed events</strong> or <strong>Door staff assignments</strong>, then paste or
-                  scan each code (including your own pass if you bought one). One successful scan per ticket; duplicates are rejected.{" "}
-                  <strong>On the attendee side,</strong> each pass shows <strong>Checked in</strong> on <em>My tickets</em> after the server
-                  updates — refresh or revisit that page if it still says booked.
+              <header className="checkin-dashboard-header">
+                <div className="checkin-dashboard-header-top">
+                  <h2>Check-in dashboard</h2>
+                  {dashboard ? (
+                    <button type="button" className="ghost-button compact-button" onClick={downloadDashboardCsv}>
+                      Download CSV
+                    </button>
+                  ) : null}
+                </div>
+                <p className="checkin-dashboard-intro">
+                  Choose an event under <strong>Managed events</strong> or <strong>Door staff</strong>, then paste or scan each ticket code.
+                  Each QR works once. With <em>Verify only</em>, the ticket is validated but not marked attended. Attendees see{" "}
+                  <strong>Checked in</strong> on <em>My tickets</em> after a successful scan.
                 </p>
-                {dashboard && (
-                  <button className="ghost-button" type="button" onClick={downloadDashboardCsv}>
-                    Download CSV
-                  </button>
-                )}
-              </div>
+              </header>
               <div className="checkin-form-wrap" ref={checkinFormRef}>
-                <form className="inline-form dashboard-checkin-form" onSubmit={handleCheckIn}>
-                  <input
-                    placeholder="Paste ticket code here..."
-                    value={checkInCode}
-                    onChange={(e) => {
-                      setCheckInCode(e.target.value);
-                      setCheckInNotice(null);
-                    }}
-                    autoCapitalize="characters"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
+                <form className="dashboard-checkin-form" onSubmit={handleCheckIn}>
+                  <div className="dashboard-checkin-field">
+                    <label className="checkin-field-label" htmlFor="checkin-code-input">
+                      Ticket code
+                    </label>
+                    <input
+                      id="checkin-code-input"
+                      placeholder="EWE-XXXXXXXX or paste full code"
+                      value={checkInCode}
+                      onChange={(e) => {
+                        setCheckInCode(e.target.value);
+                        setCheckInNotice(null);
+                      }}
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </div>
                   <label className="checkin-verify-toggle">
                     <input
                       type="checkbox"
                       checked={checkInVerifyOnly}
                       onChange={(e) => setCheckInVerifyOnly(e.target.checked)}
                     />
-                    Verify only (do not mark attended)
+                    <span>Verify only (do not mark attended)</span>
                   </label>
-                  <PrimaryButton type="submit">{checkInVerifyOnly ? "Verify ticket" : "Mark attended"}</PrimaryButton>
+                  <div className="dashboard-checkin-button-row">
+                    <PrimaryButton type="submit" style={{ width: "100%" }}>
+                      {checkInVerifyOnly ? "Verify ticket" : "Mark attended"}
+                    </PrimaryButton>
+                    <button
+                      type="button"
+                      className="ghost-button dashboard-scan-btn"
+                      onClick={() => setScannerOpen((open) => !open)}
+                    >
+                      {scannerOpen ? "Stop camera" : "Scan QR with camera"}
+                    </button>
+                  </div>
                 </form>
                 {checkInNotice ? (
                   <p className={`checkin-notice${checkInNotice.ok ? " checkin-notice--ok" : " checkin-notice--err"}`} role="status">
                     {checkInNotice.text}
                   </p>
                 ) : null}
-              </div>
-              <div className="dashboard-checkin-tools">
-                <button type="button" className="ghost-button dashboard-scan-btn" onClick={() => setScannerOpen((open) => !open)}>
-                  {scannerOpen ? "Stop camera" : "Scan QR with camera"}
-                </button>
               </div>
               {scannerOpen ? <QrScannerPanel onScan={onQrDecoded} onCameraError={onQrCameraError} /> : null}
 
