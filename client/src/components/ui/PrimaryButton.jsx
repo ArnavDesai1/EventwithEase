@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-export default function PrimaryButton({ children, onClick, type = "button", style, disabled = false }) {
+export default function PrimaryButton({ children, onClick, type = "button", style, disabled = false, className }) {
   const ref = useRef(null);
 
   function handleClick(event) {
@@ -13,8 +13,10 @@ export default function PrimaryButton({ children, onClick, type = "button", styl
     onClick?.(event);
   }
 
+  const cls = ["primary-button", className].filter(Boolean).join(" ");
+
   return (
-    <button ref={ref} className="primary-button" type={type} onClick={handleClick} style={style} disabled={disabled}>
+    <button ref={ref} className={cls} type={type} onClick={handleClick} style={style} disabled={disabled}>
       {children}
     </button>
   );
