@@ -3112,8 +3112,9 @@ export default function App() {
                 <strong>We could not load events</strong>
                 <p>{eventsError}</p>
                 <p className="api-error-hint">
-                  Confirm <code className="api-error-code">VITE_API_URL</code> on Vercel matches your live API (for
-                  example <code className="api-error-code">/api</code> at the end).
+                  Confirm <code className="api-error-code">VITE_API_URL</code> on Vercel matches your Render web
+                  service URL plus <code className="api-error-code">/api</code> — use the hostname exactly as shown in
+                  Render (a typo or extra hyphen often returns 404).
                 </p>
               </div>
               <button type="button" className="api-error-retry" onClick={retryLoadEvents} disabled={eventsReloading}>
