@@ -3786,6 +3786,107 @@ body.nav-drawer-open {
   font-size: 0.75rem;
 }
 
+.fan-patron-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fan-patron-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+}
+
+.fan-patron-title {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.fan-patron-rank {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--ink-1);
+}
+
+.fan-patron-spend {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fan-patron-track-wrap {
+  margin-bottom: 6px;
+}
+
+.fan-patron-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: visible;
+}
+
+.fan-patron-track-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(147, 112, 219, 0.95), rgba(62, 207, 184, 0.85));
+  box-shadow: 0 0 12px rgba(147, 112, 219, 0.25);
+  transition: width 0.45s var(--ease-out);
+}
+
+.fan-patron-tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: auto;
+}
+
+.fan-patron-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fan-patron-next {
+  margin: 0 0 8px;
+  font-size: 0.76rem;
+  color: var(--ink-2);
+  line-height: 1.35;
+}
+
+.fan-perk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fan-perk-chip {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 168, 87, 0.28);
+  background: rgba(232, 168, 87, 0.08);
+  color: var(--ink-2);
+}
+
 .stats-page {
   padding: 24px 20px 48px;
   max-width: 1100px;

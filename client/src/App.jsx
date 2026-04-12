@@ -17,6 +17,17 @@ import { ogEventUrl } from "./utils/shareUrls.js";
 import { isNotifSoundEnabled, setNotifSoundEnabled } from "./utils/notifSound.js";
 import "./App.css";
 
+/** INR thresholds for patron bar + spend-tier XP (currency matches `formatCurrency`). */
+const PATRON_SPEND_TIERS = Object.freeze([0, 500, 2500, 10000, 25000]);
+const PATRON_TIER_NAMES = Object.freeze([
+  "Explorer",
+  "Bronze supporter",
+  "Silver supporter",
+  "Gold supporter",
+  "Platinum supporter",
+]);
+const PATRON_BAR_MAX = PATRON_SPEND_TIERS[PATRON_SPEND_TIERS.length - 1];
+
 const emptyEventForm = {
   title: "",
   description: "",
@@ -370,16 +381,84 @@ export default function App() {
 
   const fanProgress = useMemo(() => {
     if (!user) return null;
-    const tickets = myTickets.filter((t) => t.status !== "refunded" && t.status !== "expired").length;
+    const activeTickets = myTickets.filter((t) => t.status !== "refunded" && t.status !== "expired");
+    const ticketCount = activeTickets.length;
+    const totalSpend = activeTickets.reduce((sum, t) => sum + Math.max(0, Number(t.price) || 0), 0);
     const wl = wishlist.length;
     const fol = followingHosts.length;
-    const score = tickets * 45 + wl * 12 + fol * 20 + (myTickets.length >= 2 ? 25 : 0);
+
+    let volumeXp = 0;
+    if (ticketCount >= 2) volumeXp += 25;
+    if (ticketCount >= 3) volumeXp += 34;
+    if (ticketCount >= 5) volumeXp += 52;
+    if (ticketCount >= 10) volumeXp += 100;
+    if (ticketCount >= 20) volumeXp += 160;
+
+    const spendDripXp = Math.min(340, Math.floor(totalSpend / 100));
+    let patronTierXp = 0;
+    if (totalSpend >= PATRON_SPEND_TIERS[1]) patronTierXp += 30;
+    if (totalSpend >= PATRON_SPEND_TIERS[2]) patronTierXp += 48;
+    if (totalSpend >= PATRON_SPEND_TIERS[3]) patronTierXp += 72;
+    if (totalSpend >= PATRON_SPEND_TIERS[4]) patronTierXp += 110;
+
+    const score = ticketCount * 45 + wl * 12 + fol * 20 + volumeXp + spendDripXp + patronTierXp;
     const level = Math.min(99, Math.floor(score / 150) + 1);
     const levelStart = (level - 1) * 150;
     const levelEnd = level * 150;
     const span = Math.max(levelEnd - levelStart, 1);
     const pct = Math.min(100, ((score - levelStart) / span) * 100);
-    return { score, level, levelEnd, pct, tickets, wl, fol };
+
+    let patronTierIdx = 0;
+    for (let i = PATRON_SPEND_TIERS.length - 1; i >= 0; i -= 1) {
+      if (totalSpend >= PATRON_SPEND_TIERS[i]) {
+        patronTierIdx = i;
+        break;
+      }
+    }
+    const patronLabel = PATRON_TIER_NAMES[patronTierIdx];
+    const nextTierAmt = PATRON_SPEND_TIERS[patronTierIdx + 1];
+    let patronNextHint = "";
+    if (nextTierAmt == null) {
+      patronNextHint = "Top patron tier — thanks for backing so many events.";
+    } else {
+      const gap = Math.max(0, nextTierAmt - totalSpend);
+      patronNextHint =
+        gap > 0
+          ? `${formatCurrency(gap)} more on active tickets to reach ${PATRON_TIER_NAMES[patronTierIdx + 1]}`
+          : "";
+    }
+
+    const patronBarPct = Math.min(100, (totalSpend / PATRON_BAR_MAX) * 100);
+    const patronTicks = PATRON_SPEND_TIERS.slice(1, -1).map((amt) => ({
+      amt,
+      leftPct: Math.min(100, (amt / PATRON_BAR_MAX) * 100),
+    }));
+
+    const perkChips = [];
+    if (ticketCount >= 3) perkChips.push({ key: "t3", label: "3+ ticket stack" });
+    if (ticketCount >= 5) perkChips.push({ key: "t5", label: "5+ ticket stack" });
+    if (ticketCount >= 10) perkChips.push({ key: "t10", label: "10+ hall pass" });
+    if (ticketCount >= 20) perkChips.push({ key: "t20", label: "20+ megafan" });
+    if (totalSpend >= PATRON_SPEND_TIERS[1]) perkChips.push({ key: "s1", label: "Bronze spend tier" });
+    if (totalSpend >= PATRON_SPEND_TIERS[2]) perkChips.push({ key: "s2", label: "Silver spend tier" });
+    if (totalSpend >= PATRON_SPEND_TIERS[3]) perkChips.push({ key: "s3", label: "Gold spend tier" });
+    if (totalSpend >= PATRON_SPEND_TIERS[4]) perkChips.push({ key: "s4", label: "Platinum spend tier" });
+
+    return {
+      score,
+      level,
+      levelEnd,
+      pct,
+      tickets: ticketCount,
+      wl,
+      fol,
+      totalSpend,
+      patronLabel,
+      patronNextHint,
+      patronBarPct,
+      patronTicks,
+      perkChips,
+    };
   }, [user, myTickets, wishlist, followingHosts]);
 
   useEffect(() => {
@@ -2839,8 +2918,43 @@ export default function App() {
                   <div className="fan-progress-track" title={`Next level at ${fanProgress.levelEnd} XP`}>
                     <div className="fan-progress-fill" style={{ width: `${fanProgress.pct}%` }} />
                   </div>
+                  <div className="fan-patron-block" aria-label="Patron progress from ticket spend">
+                    <div className="fan-patron-head">
+                      <span className="fan-patron-title">Patron power</span>
+                      <span className="fan-patron-rank">{fanProgress.patronLabel}</span>
+                      <span className="fan-patron-spend">{formatCurrency(fanProgress.totalSpend)} on active tickets</span>
+                    </div>
+                    <div className="fan-patron-track-wrap">
+                      <div className="fan-patron-track" role="presentation">
+                        <div className="fan-patron-track-fill" style={{ width: `${fanProgress.patronBarPct}%` }} />
+                        {fanProgress.patronTicks.map((tk) => (
+                          <span
+                            key={tk.amt}
+                            className="fan-patron-tick"
+                            style={{ left: `${tk.leftPct}%` }}
+                            title={formatCurrency(tk.amt)}
+                          />
+                        ))}
+                      </div>
+                      <div className="fan-patron-scale" aria-hidden>
+                        <span>0</span>
+                        <span>{formatCurrency(PATRON_SPEND_TIERS[4])}</span>
+                      </div>
+                    </div>
+                    {fanProgress.patronNextHint ? <p className="fan-patron-next">{fanProgress.patronNextHint}</p> : null}
+                    {fanProgress.perkChips.length ? (
+                      <ul className="fan-perk-chips">
+                        {fanProgress.perkChips.map((p) => (
+                          <li key={p.key} className="fan-perk-chip">
+                            {p.label}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                   <p className="auth-note fan-progress-hint">
-                    +45 XP per active ticket · +12 wishlist · +20 per host you follow · +25 when you hold 2+ tickets
+                    Level XP: +45 per active ticket · +12 wishlist saves · +20 per host you follow · bonus stacks at 2 / 3 /
+                    5 / 10 / 20 tickets · +1 XP per ₹100 spent (cap 340) · extra bursts at ₹500 / ₹2.5k / ₹10k / ₹25k.
                   </p>
                 </div>
               ) : null}
