@@ -38,6 +38,18 @@ npm run dev
 
 Frontend runs on `http://localhost:5173` and expects the API on `http://localhost:5000/api`.
 
+## Demo data (production-like catalogue)
+
+With `MONGODB_URI` set, from `server`:
+
+```bash
+npm run seed:demo
+```
+
+Inserts **20+ events** (past + upcoming across cities), **25+ public reviews**, **private feedback** rows for the organiser dashboard, and **sample bookings with QR tickets** (including some checked-in) so browse, detail, and dashboards look like a real ticketing site. Safe to re-run: skips existing event titles and duplicate reviews/bookings per user.
+
+Crowd reviewer accounts use password **`demo1234`** (emails `crowd.*@eventwithease.com`). See `docs/HACKATHON_COVERAGE.md` for hackathon spec vs implementation.
+
 ## Tested MVP flow
 
 - Organiser signup and login
