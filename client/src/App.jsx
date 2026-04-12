@@ -343,7 +343,7 @@ export default function App() {
     const now = Date.now();
     if (pageViewPostedRef.current.path === p && now - pageViewPostedRef.current.at < 22000) return;
     pageViewPostedRef.current = { path: p, at: now };
-    api.post("/analytics/pageview", { path: p }).catch(() => {});
+    api.post("/app/hit", { path: p }).catch(() => {});
   }, [loading, location.pathname]);
 
   useEffect(() => {
@@ -388,7 +388,7 @@ export default function App() {
     setStatsLoadError(null);
     void (async () => {
       try {
-        const { data } = await api.get("/analytics/overview");
+        const { data } = await api.get("/app/stats");
         if (!cancelled) setStatsOverview(data);
       } catch (e) {
         if (!cancelled) {

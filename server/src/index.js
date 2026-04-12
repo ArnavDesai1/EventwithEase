@@ -56,7 +56,8 @@ app.use("/api/checkin", checkinRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/waitlist", waitlistRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/analytics", analyticsRoutes);
+/** `/api/app/*` — neutral paths so ad blockers do not block `analytics`/`pageview` URLs (ERR_BLOCKED_BY_CLIENT). */
+app.use("/api/app", analyticsRoutes);
 app.use("/api/event-staff", eventStaffRoutes);
 app.use("/api/organisers", organiserRoutes);
 
