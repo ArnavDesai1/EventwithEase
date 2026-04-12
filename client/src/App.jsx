@@ -2973,7 +2973,11 @@ export default function App() {
         <section id="ewe-tickets" className={panelClass("panel", ["attendee"])} ref={ticketsRef}>
           <div className="section-head">
             <h2>Your QR tickets</h2>
-            <p className="section-note">Live countdown and cancel window show here once events are loaded. Open the bell menu for the same list plus host-follow alerts.</p>
+            <p className="section-note">
+              Live countdown and cancel window show here once events are loaded. After entry, the host scans your QR once — your status
+              here becomes <strong>Checked in</strong> (refresh if needed). Same login can both host and hold tickets; use <strong>My tickets</strong>{" "}
+              as the attendee view and <strong>Check-in</strong> as the door view.
+            </p>
           </div>
           <div className="ticket-stack">
             {myTickets.length ? (
@@ -3158,9 +3162,12 @@ export default function App() {
               <div className="section-head">
                 <h2>Check-in dashboard</h2>
                 <p className="section-note">
-                  You (the signed-in host or door volunteer on the host account) scan each attendee&apos;s QR or paste their code. The
-                  server records one successful scan per ticket — a second scan is rejected. Pick the live event under{" "}
-                  <strong>Managed events</strong> so codes cannot be checked against the wrong gate.
+                  <strong>Who scans:</strong> whoever is logged in as the <strong>host</strong> (organiser account) at the door — that can
+                  be you even if the same email also bought tickets for this event. You act as host in <strong>Check-in</strong>, select the
+                  event under <strong>Managed events</strong>, then scan or paste each code (including your own pass if you bought one).
+                  One successful scan per ticket; duplicates are rejected. <strong>On the attendee side,</strong> each pass shows{" "}
+                  <strong>Checked in</strong> on <em>My tickets</em> after the server updates — refresh or revisit that page if it still
+                  says booked.
                 </p>
                 {dashboard && (
                   <button className="ghost-button" type="button" onClick={downloadDashboardCsv}>
