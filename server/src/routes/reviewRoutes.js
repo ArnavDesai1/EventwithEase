@@ -1,10 +1,18 @@
 import express from "express";
 import Review from "../models/Review.js";
-import Booking from "../models/Booking.js";
+import Ticket from "../models/Ticket.js";
 import Event from "../models/Event.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
+
+async function hasEligibleTicketForEvent(eventId, userId) {
+  return Ticket.exists({
+    eventId,
+    userId,
+    status: { $in: ["booked", "checked-in", "expired"] },
+  });
+}
 
 router.get("/event/:eventId", async (req, res) => {
   try {
@@ -23,13 +31,13 @@ router.post("/", requireAuth, async (req, res) => {
     const event = await Event.findById(eventId);
     if (!event) return res.status(404).json({ message: "Event not found." });
 
-    const hasBooking = await Booking.exists({ eventId, attendeeId: req.user._id });
-    if (!hasBooking) {
-      return res.status(403).json({ message: "Book this event before reviewing." });
+    const eligible = await hasEligibleTicketForEvent(eventId, req.user._id);
+    if (!eligible) {
+      return res.status(403).json({ message: "You need a ticket for this event to leave a public review." });
     }
 
     if (new Date(event.date) > new Date()) {
-      return res.status(400).json({ message: "Reviews open after the event ends." });
+      return res.status(400).json({ message: "Reviews open after the event start time." });
     }
 
     const existing = await Review.findOne({ eventId, attendeeId: req.user._id });

@@ -61,6 +61,8 @@ const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
 /** Matches server `EWE_CANCEL_DEADLINE_HOURS` (hours before start that cancel stays open). */
 const CANCEL_DEADLINE_HOURS_BEFORE = 10;
 
+const DISCOVER_PROMO_DISMISS_STORAGE_KEY = "eventwithease-discover-promos-dismissed";
+
 /** Populated `{ _id, name }` or raw ObjectId string from older responses. */
 function eventOrganiserRefId(event) {
   const o = event?.organiserId;
@@ -306,6 +308,15 @@ export default function App() {
     websiteUrl: "",
   });
   const [googleReady, setGoogleReady] = useState(false);
+  const [dismissedPromoIds, setDismissedPromoIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(DISCOVER_PROMO_DISMISS_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  });
   const detailsRef = useRef(null);
   const browseRef = useRef(null);
   const organiserRef = useRef(null);
@@ -563,7 +574,11 @@ export default function App() {
 
   const hasSelectedBooking = useMemo(() => {
     if (!selectedEvent) return false;
-    return myTickets.some((ticket) => String(ticket.eventId?._id) === String(selectedEvent._id));
+    return myTickets.some(
+      (ticket) =>
+        String(ticket.eventId?._id || ticket.eventId) === String(selectedEvent._id) &&
+        ticket.status !== "refunded"
+    );
   }, [myTickets, selectedEvent]);
 
   const selectedEventEnded = useMemo(() => {
@@ -583,6 +598,41 @@ export default function App() {
     }
     return p;
   }, [selectedEvent?.bookingPromo, selectedEventCancelled]);
+
+  const discoverPromoStripItems = useMemo(() => {
+    const now = Date.now();
+    const dismissed = new Set(dismissedPromoIds);
+    const fromEvents = events
+      .filter((e) => {
+        if (e.cancelledAt || dismissed.has(String(e._id))) return false;
+        if (new Date(e.date).getTime() <= now) return false;
+        const p = e.bookingPromo;
+        if (!p?.active || !String(p.headline || "").trim()) return false;
+        if (p.endsAt) {
+          const t = new Date(p.endsAt).getTime();
+          if (Number.isFinite(t) && t <= now) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 4)
+      .map((event) => ({ kind: "event", id: String(event._id), event }));
+    if (fromEvents.length > 0) return fromEvents;
+    if (!dismissed.has("static-prebook")) {
+      return [{ kind: "static", id: "static-prebook" }];
+    }
+    return [];
+  }, [events, dismissedPromoIds]);
+
+  const dismissDiscoverPromo = useCallback((id) => {
+    setDismissedPromoIds((prev) => {
+      const s = String(id);
+      if (prev.includes(s)) return prev;
+      const next = [...prev, s];
+      localStorage.setItem(DISCOVER_PROMO_DISMISS_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const wishlistSet = useMemo(() => new Set(wishlist.map(String)), [wishlist]);
 
@@ -3108,8 +3158,8 @@ export default function App() {
                   {hasSelectedBooking && selectedEventEnded
                     ? "Below: public star review (everyone sees it) and private feedback (only the organiser sees it)."
                     : hasSelectedBooking
-                      ? "When this event’s date has passed, you’ll be able to post a public review and private feedback on this same page."
-                      : "Book a ticket first. After the event, return here for a public review and optional private note to the organiser."}
+                      ? "After the scheduled start time, you can post a public review and private feedback here (same page — scroll to the forms below)."
+                      : "Book a ticket first. After the event starts, return here for a public review and optional private note to the organiser."}
                 </p>
                 {reviews.length ? (
                   <div className="review-rail" role="region" aria-label={`${reviews.length} public reviews`}>
@@ -3155,16 +3205,19 @@ export default function App() {
               {hasSelectedBooking && selectedEventEnded && (
                 <div className="detail-block">
                   <h4>Private feedback</h4>
+                  <p className="auth-note">Only the organiser reads this (not shown on the public review wall).</p>
                   <div className="review-form">
                     <select value={feedbackForm.rating} onChange={(e) => setFeedbackForm((current) => ({ ...current, rating: Number(e.target.value) }))}>
                       {[5,4,3,2,1].map((value) => (
                         <option key={value} value={value}>{value} star{value > 1 ? "s" : ""}</option>
                       ))}
                     </select>
-                    <input
-                      placeholder="Feedback for the organiser"
+                    <textarea
+                      rows={4}
+                      placeholder="Private feedback for the organiser"
                       value={feedbackForm.feedback}
                       onChange={(e) => setFeedbackForm((current) => ({ ...current, feedback: e.target.value }))}
+                      className="feedback-textarea"
                     />
                     <button className="ghost-button" type="button" onClick={submitFeedback}>
                       Submit feedback
@@ -3257,6 +3310,31 @@ export default function App() {
               as the attendee view and <strong>Check-in</strong> as the door view.
             </p>
           </div>
+          {user && !isOrganiser ? (
+            <div className="networking-card networking-card--tickets">
+              <p className="card-label">Networking at events you attend</p>
+              <p className="auth-note">
+                Other ticket holders can see your LinkedIn on each event&apos;s page when you opt in. Hosts edit socials under{" "}
+                <strong>Organiser</strong> on Discover or on <strong>Organise</strong>.
+              </p>
+              <label className="networking-toggle">
+                <input
+                  type="checkbox"
+                  checked={profileForm.networkingOptIn}
+                  onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
+                />
+                Share my LinkedIn with fellow ticket holders
+              </label>
+              <input
+                placeholder="LinkedIn URL"
+                value={profileForm.linkedinUrl}
+                onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
+              />
+              <button className="ghost-button" type="button" onClick={saveProfile}>
+                Save networking preferences
+              </button>
+            </div>
+          ) : null}
           <div className="ticket-stack">
             {myTickets.length ? (
               myTickets.map((ticket, index) => {
@@ -3438,6 +3516,56 @@ export default function App() {
                       <p className="auth-note">This account cannot publish events. Sign in with an organiser profile.</p>
                     </div>
                   ) : (
+                    <>
+                    <section className={`${panelClass("panel span-two full-width", ["organiser"])} host-profile-card`}>
+                      <p className="card-label">Host profile, socials & LinkedIn</p>
+                      <p className="auth-note">
+                        Your public <strong>/host/…</strong> page and how ticket holders see you on event networking lists.
+                      </p>
+                      <label className="networking-toggle">
+                        <input
+                          type="checkbox"
+                          checked={profileForm.networkingOptIn}
+                          onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
+                        />
+                        Share my LinkedIn with fellow ticket holders on event pages
+                      </label>
+                      <input
+                        placeholder="LinkedIn URL"
+                        value={profileForm.linkedinUrl}
+                        onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
+                      />
+                      <input
+                        placeholder="Short tagline (e.g. Indie gigs · Mumbai)"
+                        value={profileForm.hostTagline}
+                        onChange={(e) => setProfileForm((current) => ({ ...current, hostTagline: e.target.value }))}
+                      />
+                      <textarea
+                        placeholder="Bio — who you are, what events you run"
+                        rows={4}
+                        value={profileForm.hostBio}
+                        onChange={(e) => setProfileForm((current) => ({ ...current, hostBio: e.target.value }))}
+                        className="host-bio-textarea"
+                      />
+                      <input
+                        placeholder="Website URL"
+                        value={profileForm.websiteUrl}
+                        onChange={(e) => setProfileForm((current) => ({ ...current, websiteUrl: e.target.value }))}
+                      />
+                      <input
+                        placeholder="X (Twitter) URL"
+                        value={profileForm.twitterUrl}
+                        onChange={(e) => setProfileForm((current) => ({ ...current, twitterUrl: e.target.value }))}
+                      />
+                      <input
+                        placeholder="Instagram URL"
+                        value={profileForm.instagramUrl}
+                        onChange={(e) => setProfileForm((current) => ({ ...current, instagramUrl: e.target.value }))}
+                      />
+                      <button className="ghost-button" type="button" onClick={saveProfile}>
+                        Save profile
+                      </button>
+                    </section>
                     <section id="ewe-organise" className={panelClass("panel span-two full-width", ["organiser"])} ref={organiserRef}>
             <div className="section-head">
               <h2>Create event</h2>
@@ -3714,6 +3842,7 @@ export default function App() {
               </PrimaryButton>
             </form>
           </section>
+                    </>
                   )}
                 </>
               ) : null}
@@ -4162,7 +4291,19 @@ export default function App() {
                 type="button"
                 className={`hero-chip hero-chip-button${profileMode === mode ? " is-active" : ""}`}
                 key={label}
-                onClick={() => focusProfileMode(mode)}
+                onClick={() => {
+                  if (mode === "organiser") {
+                    setProfileMode("organiser");
+                    navigate("/organise");
+                    return;
+                  }
+                  if (mode === "checkin") {
+                    setProfileMode("checkin");
+                    navigate("/check-in");
+                    return;
+                  }
+                  focusProfileMode("attendee");
+                }}
               >
                 <strong>{label}</strong>
                 <span>{sub}</span>
@@ -4186,6 +4327,55 @@ export default function App() {
           ))}
         </div>
       </header>
+
+      {discoverPromoStripItems.length > 0 ? (
+        <aside className="discover-promo-strip" aria-label="Spotlight offers">
+          <div className="discover-promo-strip-inner">
+            {discoverPromoStripItems.map((item) =>
+              item.kind === "event" ? (
+                <div key={item.id} className="discover-promo-card discover-promo-card--animated">
+                  <button
+                    type="button"
+                    className="discover-promo-dismiss"
+                    aria-label="Dismiss offer"
+                    onClick={() => dismissDiscoverPromo(item.id)}
+                  >
+                    ×
+                  </button>
+                  <span className="discover-promo-badge">{item.event.bookingPromo?.badge || "Offer"}</span>
+                  <p className="discover-promo-headline">{item.event.bookingPromo.headline}</p>
+                  {item.event.bookingPromo?.subtext ? (
+                    <p className="discover-promo-sub">{item.event.bookingPromo.subtext}</p>
+                  ) : null}
+                  <p className="discover-promo-event-title">{item.event.title}</p>
+                  <button type="button" className="discover-promo-cta" onClick={() => handleSelectEvent(item.event._id)}>
+                    View &amp; pre-book
+                  </button>
+                </div>
+              ) : (
+                <div key={item.id} className="discover-promo-card discover-promo-card--animated discover-promo-card--static">
+                  <button
+                    type="button"
+                    className="discover-promo-dismiss"
+                    aria-label="Dismiss"
+                    onClick={() => dismissDiscoverPromo(item.id)}
+                  >
+                    ×
+                  </button>
+                  <span className="discover-promo-badge">Spotlight</span>
+                  <p className="discover-promo-headline">Exclusive pre-book drops &amp; host promos</p>
+                  <p className="discover-promo-sub">
+                    Watch for gold banners on event pages — hosts can run limited windows before doors. Browse now and save your spot early.
+                  </p>
+                  <button type="button" className="discover-promo-cta" onClick={() => scrollToRef(browseRef)}>
+                    Browse events
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        </aside>
+      ) : null}
 
       {statusMessage && <div className="banner success">{statusMessage}</div>}
       {errorMessage && <div className="banner error">{errorMessage}</div>}
@@ -4301,37 +4491,34 @@ export default function App() {
                 <button
                   className={`tab${profileMode === "checkin" ? " active" : ""}`}
                   type="button"
-                  onClick={() => focusProfileMode("checkin")}
+                  onClick={() => {
+                    setProfileMode("checkin");
+                    navigate("/check-in");
+                  }}
                 >
                   Check-in
                 </button>
               </div>
-              <div className="networking-card">
-                <p className="card-label">Networking profile</p>
-                <label className="networking-toggle">
-                  <input
-                    type="checkbox"
-                    checked={profileForm.networkingOptIn}
-                    onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
-                  />
-                  Share my LinkedIn with fellow attendees
-                </label>
-                <input
-                  placeholder="LinkedIn URL"
-                  value={profileForm.linkedinUrl}
-                  onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
-                />
-                <button className="ghost-button" type="button" onClick={saveProfile}>
-                  Save networking profile
-                </button>
-              </div>
-              {isOrganiser && profileMode !== "attendee" ? (
+              {isOrganiser && profileMode === "organiser" ? (
                 <div className="host-profile-card">
-                  <p className="card-label">Public host profile</p>
+                  <p className="card-label">Host profile, socials & LinkedIn</p>
                   <p className="auth-note">
-                    Shown on your <strong>/host/…</strong> page and helps attendees trust you. You can still use the same account to buy
-                    tickets.
+                    Updates your public <strong>/host/…</strong> page. <strong>LinkedIn</strong> and the toggle below also control whether
+                    other ticket holders see you on each event&apos;s networking list when you attend as a guest.
                   </p>
+                  <label className="networking-toggle">
+                    <input
+                      type="checkbox"
+                      checked={profileForm.networkingOptIn}
+                      onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
+                    />
+                    Share my LinkedIn with fellow ticket holders on event pages
+                  </label>
+                  <input
+                    placeholder="LinkedIn URL"
+                    value={profileForm.linkedinUrl}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
+                  />
                   <input
                     placeholder="Short tagline (e.g. Indie gigs · Mumbai)"
                     value={profileForm.hostTagline}
@@ -4360,7 +4547,7 @@ export default function App() {
                     onChange={(e) => setProfileForm((current) => ({ ...current, instagramUrl: e.target.value }))}
                   />
                   <button className="ghost-button" type="button" onClick={saveProfile}>
-                    Save host profile
+                    Save profile
                   </button>
                 </div>
               ) : null}

@@ -4178,3 +4178,169 @@ body.nav-drawer-open {
     text-align: left;
   }
 }
+
+/* Discover spotlight / pre-book promo strip */
+.discover-promo-strip {
+  max-width: 1200px;
+  margin: 0 auto 18px;
+  padding: 0 20px;
+}
+
+.discover-promo-strip-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.discover-promo-card {
+  position: relative;
+  flex: 1 1 280px;
+  min-height: 120px;
+  padding: 16px 44px 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(232, 168, 87, 0.35);
+  background: linear-gradient(135deg, rgba(30, 28, 24, 0.95), rgba(18, 22, 28, 0.98));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.discover-promo-card--static {
+  border-color: rgba(62, 207, 184, 0.35);
+}
+
+.discover-promo-card--animated::before {
+  content: "";
+  position: absolute;
+  inset: -40% -20%;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(232, 168, 87, 0.12) 35%,
+    rgba(62, 207, 184, 0.1) 55%,
+    transparent 70%
+  );
+  animation: discover-promo-shimmer 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes discover-promo-shimmer {
+  0% {
+    transform: translateX(-12%) rotate(8deg);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateX(12%) rotate(8deg);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(-12%) rotate(8deg);
+    opacity: 0.35;
+  }
+}
+
+.discover-promo-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-2);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.discover-promo-dismiss:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--ink-1);
+}
+
+.discover-promo-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(232, 168, 87, 0.35), rgba(62, 207, 184, 0.25));
+  color: var(--ink-1);
+  margin-bottom: 8px;
+}
+
+.discover-promo-headline {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink-1);
+}
+
+.discover-promo-sub {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  line-height: 1.45;
+}
+
+.discover-promo-event-title {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+
+.discover-promo-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 168, 87, 0.45);
+  background: rgba(232, 168, 87, 0.12);
+  color: var(--ink-1);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.discover-promo-cta:hover {
+  background: rgba(232, 168, 87, 0.22);
+  border-color: rgba(232, 168, 87, 0.65);
+  transform: translateY(-1px);
+}
+
+.discover-promo-card--static .discover-promo-cta {
+  border-color: rgba(62, 207, 184, 0.45);
+  background: rgba(62, 207, 184, 0.12);
+}
+
+.discover-promo-card--static .discover-promo-cta:hover {
+  background: rgba(62, 207, 184, 0.22);
+  border-color: rgba(62, 207, 184, 0.65);
+}
+
+.feedback-textarea {
+  width: 100%;
+  min-height: 120px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ink-1);
+  font: inherit;
+  resize: vertical;
+}
+
+.feedback-textarea:focus {
+  outline: 2px solid rgba(62, 207, 184, 0.45);
+  outline-offset: 2px;
+}
+
+.networking-card--tickets {
+  margin-top: 14px;
+}
