@@ -4341,6 +4341,90 @@ body.nav-drawer-open {
   outline-offset: 2px;
 }
 
-.networking-card--tickets {
-  margin-top: 14px;
+.gamify-floating-hint {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.gamify-floating-dock {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  z-index: 95;
+  max-width: min(380px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.gamify-floating-dock > * {
+  pointer-events: auto;
+}
+
+.gamify-floating-panel {
+  position: relative;
+  padding-top: 36px;
+  max-height: min(72vh, 540px);
+  overflow-y: auto;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  -webkit-overflow-scrolling: touch;
+}
+
+.fan-progress-card--floating {
+  margin-top: 0;
+}
+
+.gamify-floating-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-2);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.gamify-floating-dismiss:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ink-1);
+}
+
+.gamify-floating-reopen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(232, 168, 87, 0.45);
+  background: linear-gradient(145deg, rgba(22, 26, 32, 0.97), rgba(14, 18, 24, 0.98));
+  color: var(--ink-1);
+  cursor: pointer;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.15s ease, transform 0.12s ease;
+  text-align: left;
+}
+
+.gamify-floating-reopen:hover {
+  border-color: rgba(232, 168, 87, 0.7);
+  transform: translateY(-1px);
+}
+
+.gamify-floating-reopen-level {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.gamify-floating-reopen-xp {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }

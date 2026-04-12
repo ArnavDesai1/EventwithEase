@@ -296,20 +296,12 @@ router.post("/google", async (req, res) => {
 
 router.post("/profile", requireAuth, async (req, res) => {
   try {
-    const {
-      linkedinUrl = "",
-      networkingOptIn = false,
-      hostBio,
-      hostTagline,
-      twitterUrl,
-      instagramUrl,
-      websiteUrl,
-    } = req.body;
+    const { linkedinUrl, networkingOptIn, hostBio, hostTagline, twitterUrl, instagramUrl, websiteUrl } = req.body;
 
-    req.user.linkedinUrl = String(linkedinUrl || "").trim();
-    req.user.networkingOptIn = Boolean(networkingOptIn);
-
-    if (hasRole(req.user, "organiser") || hasRole(req.user, "admin")) {
+    const isHost = hasRole(req.user, "organiser") || hasRole(req.user, "admin");
+    if (isHost) {
+      if (linkedinUrl !== undefined) req.user.linkedinUrl = String(linkedinUrl || "").trim();
+      if (networkingOptIn !== undefined) req.user.networkingOptIn = Boolean(networkingOptIn);
       if (hostBio !== undefined) req.user.hostBio = String(hostBio || "").trim().slice(0, 4000);
       if (hostTagline !== undefined) req.user.hostTagline = String(hostTagline || "").trim().slice(0, 200);
       if (twitterUrl !== undefined) req.user.twitterUrl = String(twitterUrl || "").trim().slice(0, 500);

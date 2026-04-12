@@ -82,7 +82,12 @@ router.get("/:id/networking", requireAuth, async (req, res) => {
     const attendees = tickets
       .map((ticket) => ticket.userId)
       .filter((user, index, self) => user && self.findIndex((item) => String(item._id) == String(user._id)) === index)
-      .filter((user) => user.networkingOptIn && user.linkedinUrl);
+      .filter(
+        (user) =>
+          user.networkingOptIn &&
+          user.linkedinUrl &&
+          (hasRole(user, "organiser") || hasRole(user, "admin"))
+      );
 
     res.json(attendees);
   } catch (error) {

@@ -62,6 +62,7 @@ const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
 const CANCEL_DEADLINE_HOURS_BEFORE = 10;
 
 const DISCOVER_PROMO_DISMISS_STORAGE_KEY = "eventwithease-discover-promos-dismissed";
+const GAMIFY_BAR_DISMISS_STORAGE_KEY = "eventwithease-gamify-bar-dismissed";
 
 /** Populated `{ _id, name }` or raw ObjectId string from older responses. */
 function eventOrganiserRefId(event) {
@@ -315,6 +316,13 @@ export default function App() {
       return Array.isArray(parsed) ? parsed.map(String) : [];
     } catch {
       return [];
+    }
+  });
+  const [gamifyBarDismissed, setGamifyBarDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(GAMIFY_BAR_DISMISS_STORAGE_KEY) === "1";
+    } catch {
+      return false;
     }
   });
   const detailsRef = useRef(null);
@@ -633,6 +641,90 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const dismissGamifyBar = useCallback(() => {
+    setGamifyBarDismissed(true);
+    try {
+      localStorage.setItem(GAMIFY_BAR_DISMISS_STORAGE_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const openGamifyBar = useCallback(() => {
+    setGamifyBarDismissed(false);
+    try {
+      localStorage.removeItem(GAMIFY_BAR_DISMISS_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const gamifyFloatingDock = useMemo(() => {
+    if (!user || !fanProgress) return null;
+    return (
+      <div className="gamify-floating-dock" aria-label="Your event explorer progress">
+        {!gamifyBarDismissed ? (
+          <div className="gamify-floating-panel fan-progress-card fan-progress-card--floating">
+            <button type="button" className="gamify-floating-dismiss" aria-label="Hide progress bar" onClick={dismissGamifyBar}>
+              ×
+            </button>
+            <div className="fan-progress-head">
+              <span className="fan-level-badge">Lv {fanProgress.level}</span>
+              <span className="fan-progress-title">Event explorer</span>
+              <span className="fan-progress-xp">{fanProgress.score} XP</span>
+            </div>
+            <div className="fan-progress-track" title={`Next level at ${fanProgress.levelEnd} XP`}>
+              <div className="fan-progress-fill" style={{ width: `${fanProgress.pct}%` }} />
+            </div>
+            <div className="fan-patron-block" aria-label="Patron progress from ticket spend">
+              <div className="fan-patron-head">
+                <span className="fan-patron-title">Patron power</span>
+                <span className="fan-patron-rank">{fanProgress.patronLabel}</span>
+                <span className="fan-patron-spend">{formatCurrency(fanProgress.totalSpend)} on active tickets</span>
+              </div>
+              <div className="fan-patron-track-wrap">
+                <div className="fan-patron-track" role="presentation">
+                  <div className="fan-patron-track-fill" style={{ width: `${fanProgress.patronBarPct}%` }} />
+                  {fanProgress.patronTicks.map((tk) => (
+                    <span
+                      key={tk.amt}
+                      className="fan-patron-tick"
+                      style={{ left: `${tk.leftPct}%` }}
+                      title={formatCurrency(tk.amt)}
+                    />
+                  ))}
+                </div>
+                <div className="fan-patron-scale" aria-hidden>
+                  <span>0</span>
+                  <span>{formatCurrency(PATRON_SPEND_TIERS[4])}</span>
+                </div>
+              </div>
+              {fanProgress.patronNextHint ? <p className="fan-patron-next">{fanProgress.patronNextHint}</p> : null}
+              {fanProgress.perkChips.length ? (
+                <ul className="fan-perk-chips">
+                  {fanProgress.perkChips.map((p) => (
+                    <li key={p.key} className="fan-perk-chip">
+                      {p.label}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <p className="auth-note fan-progress-hint">
+              Level XP: +45 per active ticket · +12 wishlist saves · +20 per host you follow · bonus stacks at 2 / 3 /
+              5 / 10 / 20 tickets · +1 XP per ₹100 spent (cap 340) · extra bursts at ₹500 / ₹2.5k / ₹10k / ₹25k.
+            </p>
+          </div>
+        ) : (
+          <button type="button" className="gamify-floating-reopen" onClick={openGamifyBar} aria-label="Show progress and patron power">
+            <span className="gamify-floating-reopen-level">Lv {fanProgress.level}</span>
+            <span className="gamify-floating-reopen-xp">{fanProgress.score} XP</span>
+          </button>
+        )}
+      </div>
+    );
+  }, [user, fanProgress, gamifyBarDismissed, dismissGamifyBar, openGamifyBar]);
 
   const wishlistSet = useMemo(() => new Set(wishlist.map(String)), [wishlist]);
 
@@ -1739,11 +1831,10 @@ export default function App() {
 
   async function saveProfile() {
     try {
-      const body = {
-        linkedinUrl: profileForm.linkedinUrl,
-        networkingOptIn: profileForm.networkingOptIn,
-      };
+      const body = {};
       if (isOrganiser) {
+        body.linkedinUrl = profileForm.linkedinUrl;
+        body.networkingOptIn = profileForm.networkingOptIn;
         body.hostTagline = profileForm.hostTagline;
         body.hostBio = profileForm.hostBio;
         body.twitterUrl = profileForm.twitterUrl;
@@ -2618,6 +2709,7 @@ export default function App() {
             )}
           </main>
         </div>
+        {gamifyFloatingDock}
         <SiteFooter />
       </div>
     );
@@ -2896,6 +2988,7 @@ export default function App() {
               document.body
             )
           : null}
+        {gamifyFloatingDock}
         <SiteFooter />
       </div>
     );
@@ -3114,7 +3207,7 @@ export default function App() {
               <div className="details-actions">
                 {hasSelectedBooking ? (
                   <div className="detail-block">
-                    <h4>Attendee networking</h4>
+                    <h4>Host &amp; organiser LinkedIn</h4>
                     {networkingList.length ? (
                       <ul>
                         {networkingList.map((person) => (
@@ -3127,13 +3220,13 @@ export default function App() {
                         ))}
                       </ul>
                     ) : (
-                      <p className="auth-note">No networking profiles shared yet.</p>
+                      <p className="auth-note">No hosts or organisers on this guest list have shared LinkedIn yet.</p>
                     )}
                   </div>
                 ) : (
                   <div className="detail-block">
-                    <h4>Attendee networking</h4>
-                    <p className="auth-note">Book a ticket to access networking links.</p>
+                    <h4>Host &amp; organiser LinkedIn</h4>
+                    <p className="auth-note">Book a ticket to see LinkedIn links that hosts and organisers choose to share.</p>
                   </div>
                 )}
               </div>
@@ -3310,31 +3403,6 @@ export default function App() {
               as the attendee view and <strong>Check-in</strong> as the door view.
             </p>
           </div>
-          {user && !isOrganiser ? (
-            <div className="networking-card networking-card--tickets">
-              <p className="card-label">Networking at events you attend</p>
-              <p className="auth-note">
-                Other ticket holders can see your LinkedIn on each event&apos;s page when you opt in. Hosts edit socials under{" "}
-                <strong>Organiser</strong> on Discover or on <strong>Organise</strong>.
-              </p>
-              <label className="networking-toggle">
-                <input
-                  type="checkbox"
-                  checked={profileForm.networkingOptIn}
-                  onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
-                />
-                Share my LinkedIn with fellow ticket holders
-              </label>
-              <input
-                placeholder="LinkedIn URL"
-                value={profileForm.linkedinUrl}
-                onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
-              />
-              <button className="ghost-button" type="button" onClick={saveProfile}>
-                Save networking preferences
-              </button>
-            </div>
-          ) : null}
           <div className="ticket-stack">
             {myTickets.length ? (
               myTickets.map((ticket, index) => {
@@ -3520,7 +3588,8 @@ export default function App() {
                     <section className={`${panelClass("panel span-two full-width", ["organiser"])} host-profile-card`}>
                       <p className="card-label">Host profile, socials & LinkedIn</p>
                       <p className="auth-note">
-                        Your public <strong>/host/…</strong> page and how ticket holders see you on event networking lists.
+                        Your public <strong>/host/…</strong> page. The LinkedIn toggle applies on event pages for <strong>hosts &amp; organisers</strong> on
+                        the guest list — plain attendees do not edit LinkedIn here.
                       </p>
                       <label className="networking-toggle">
                         <input
@@ -3528,7 +3597,7 @@ export default function App() {
                           checked={profileForm.networkingOptIn}
                           onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
                         />
-                        Share my LinkedIn with fellow ticket holders on event pages
+                        Share my LinkedIn on event pages (hosts &amp; organisers on the guest list)
                       </label>
                       <input
                         placeholder="LinkedIn URL"
@@ -4196,6 +4265,7 @@ export default function App() {
             </main>
           </div>
         </div>
+        {gamifyFloatingDock}
         <SiteFooter />
       </div>
     );
@@ -4423,56 +4493,9 @@ export default function App() {
               <p className="card-label">Signed in as</p>
               <p className="user-email">{user.email}</p>
               <span className="pill">{userRoles.join(" + ")}</span>
-              {fanProgress ? (
-                <div className="fan-progress-card" aria-label="Your event explorer progress">
-                  <div className="fan-progress-head">
-                    <span className="fan-level-badge">Lv {fanProgress.level}</span>
-                    <span className="fan-progress-title">Event explorer</span>
-                    <span className="fan-progress-xp">{fanProgress.score} XP</span>
-                  </div>
-                  <div className="fan-progress-track" title={`Next level at ${fanProgress.levelEnd} XP`}>
-                    <div className="fan-progress-fill" style={{ width: `${fanProgress.pct}%` }} />
-                  </div>
-                  <div className="fan-patron-block" aria-label="Patron progress from ticket spend">
-                    <div className="fan-patron-head">
-                      <span className="fan-patron-title">Patron power</span>
-                      <span className="fan-patron-rank">{fanProgress.patronLabel}</span>
-                      <span className="fan-patron-spend">{formatCurrency(fanProgress.totalSpend)} on active tickets</span>
-                    </div>
-                    <div className="fan-patron-track-wrap">
-                      <div className="fan-patron-track" role="presentation">
-                        <div className="fan-patron-track-fill" style={{ width: `${fanProgress.patronBarPct}%` }} />
-                        {fanProgress.patronTicks.map((tk) => (
-                          <span
-                            key={tk.amt}
-                            className="fan-patron-tick"
-                            style={{ left: `${tk.leftPct}%` }}
-                            title={formatCurrency(tk.amt)}
-                          />
-                        ))}
-                      </div>
-                      <div className="fan-patron-scale" aria-hidden>
-                        <span>0</span>
-                        <span>{formatCurrency(PATRON_SPEND_TIERS[4])}</span>
-                      </div>
-                    </div>
-                    {fanProgress.patronNextHint ? <p className="fan-patron-next">{fanProgress.patronNextHint}</p> : null}
-                    {fanProgress.perkChips.length ? (
-                      <ul className="fan-perk-chips">
-                        {fanProgress.perkChips.map((p) => (
-                          <li key={p.key} className="fan-perk-chip">
-                            {p.label}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                  <p className="auth-note fan-progress-hint">
-                    Level XP: +45 per active ticket · +12 wishlist saves · +20 per host you follow · bonus stacks at 2 / 3 /
-                    5 / 10 / 20 tickets · +1 XP per ₹100 spent (cap 340) · extra bursts at ₹500 / ₹2.5k / ₹10k / ₹25k.
-                  </p>
-                </div>
-              ) : null}
+              <p className="auth-note gamify-floating-hint">
+                Event explorer level and patron power stay in the floating panel (bottom-right) on every page — hide or restore it anytime.
+              </p>
               <div className="profile-switch">
                 <button
                   className={`tab${profileMode === "attendee" ? " active" : ""}`}
@@ -4503,8 +4526,9 @@ export default function App() {
                 <div className="host-profile-card">
                   <p className="card-label">Host profile, socials & LinkedIn</p>
                   <p className="auth-note">
-                    Updates your public <strong>/host/…</strong> page. <strong>LinkedIn</strong> and the toggle below also control whether
-                    other ticket holders see you on each event&apos;s networking list when you attend as a guest.
+                    Updates your public <strong>/host/…</strong> page. <strong>LinkedIn</strong> and the toggle below also control whether you
+                    appear in the guest-list LinkedIn section on events where you hold a ticket — only <strong>hosts and organisers</strong> can
+                    share there, not general attendees.
                   </p>
                   <label className="networking-toggle">
                     <input
@@ -4512,7 +4536,7 @@ export default function App() {
                       checked={profileForm.networkingOptIn}
                       onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
                     />
-                    Share my LinkedIn with fellow ticket holders on event pages
+                    Share my LinkedIn on event pages (hosts &amp; organisers on the guest list)
                   </label>
                   <input
                     placeholder="LinkedIn URL"
@@ -4811,6 +4835,7 @@ export default function App() {
       </main>
     </div>
   </div>
+  {gamifyFloatingDock}
   <SiteFooter />
 </div>
   );
