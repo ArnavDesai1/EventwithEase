@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import api from "./api";
 import { formatCurrency, formatDate, effectiveTicketPrice } from "./utils/format.js";
@@ -34,6 +35,8 @@ const emptyEventForm = {
 const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState(emptyAuthForm);
@@ -79,6 +82,7 @@ export default function App() {
   const authRef = useRef(null);
   const googleButtonRef = useRef(null);
   const authRoleRef = useRef(authForm.role);
+  const lastOpenedEventIdRef = useRef("");
 
   const userRoles = user?.roles?.length ? user.roles : user?.role ? [user.role] : [];
   const isOrganiser = userRoles.includes("organiser") || userRoles.includes("admin");
@@ -185,6 +189,11 @@ export default function App() {
     hydrateSession();
     handleAuthLink();
   }, []);
+
+  const eventIdInPath = useMemo(() => {
+    const match = location.pathname.match(/^\/event\/([a-fA-F0-9]{24})\/?$/);
+    return match ? match[1] : null;
+  }, [location.pathname]);
 
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -523,22 +532,46 @@ export default function App() {
     }
   }
 
-  async function handleSelectEvent(id) {
+  async function handleSelectEvent(id, { updateUrl = true } = {}) {
     try {
       const response = await api.get(`/events/${id}`);
-      setSelectedEvent(response.data);
-      setTicketCart(Object.fromEntries(response.data.ticketTypes.map((ticket, index) => [ticket._id, index === 0 ? 1 : 0])));
+      const data = response.data;
+      lastOpenedEventIdRef.current = String(id);
+      setSelectedEvent(data);
+      setTicketCart(Object.fromEntries(data.ticketTypes.map((ticket, index) => [ticket._id, index === 0 ? 1 : 0])));
       setReviewForm({ rating: 5, comment: "" });
       setFeedbackForm({ rating: 5, feedback: "" });
+      if (updateUrl) {
+        navigate(`/event/${id}`, { replace: false });
+      }
       await Promise.all([loadReviews(id), loadNetworking(id)]);
-      flash(`Loaded ${response.data.title}. Choose your ticket below.`);
+      setProfileMode("attendee");
+      flash(`Loaded ${data.title}. Choose your ticket below.`);
       requestAnimationFrame(() => {
         detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     } catch (error) {
       flash(error.response?.data?.message || "Unable to load event.", true);
+      if (!updateUrl) {
+        navigate("/", { replace: true });
+      }
     }
   }
+
+  useEffect(() => {
+    if (!eventIdInPath) {
+      lastOpenedEventIdRef.current = "";
+      return;
+    }
+    if (loading) return;
+    if (lastOpenedEventIdRef.current === eventIdInPath) return;
+    if (selectedEvent && String(selectedEvent._id) === eventIdInPath) {
+      lastOpenedEventIdRef.current = eventIdInPath;
+      return;
+    }
+    handleSelectEvent(eventIdInPath, { updateUrl: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- URL-driven load only
+  }, [loading, eventIdInPath, selectedEvent?._id]);
 
   async function handleCreateEvent(event) {
     event.preventDefault();
@@ -1028,8 +1061,20 @@ export default function App() {
   }
 
   function goDiscover() {
+    lastOpenedEventIdRef.current = "";
+    navigate("/");
+    setSelectedEvent(null);
     setProfileMode("attendee");
     scrollToRef(browseRef);
+  }
+
+  function copySelectedEventLink() {
+    if (!selectedEvent?._id) return;
+    const url = `${window.location.origin}/event/${selectedEvent._id}`;
+    navigator.clipboard.writeText(url).then(
+      () => flash("Event link copied to clipboard."),
+      () => flash("Could not copy link.", true)
+    );
   }
 
   function goBook() {
@@ -1476,8 +1521,13 @@ export default function App() {
 
         {profileMode === "attendee" && (
         <section id="ewe-book" className={panelClass("panel", ["attendee"])} ref={detailsRef}>
-          <div className="section-head">
+          <div className="section-head section-head--split">
             <h2>Book tickets</h2>
+            {selectedEvent ? (
+              <button type="button" className="ghost-button compact-button" onClick={copySelectedEventLink}>
+                Copy event link
+              </button>
+            ) : null}
           </div>
 
           {selectedEvent ? (

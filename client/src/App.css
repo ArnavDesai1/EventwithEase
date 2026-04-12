@@ -496,6 +496,11 @@ textarea {
   margin-bottom: 24px;
 }
 
+.section-head--split {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .section-head h2 {
   font-family: var(--font-display);
   font-size: clamp(1.9rem, 2.2vw, 2.8rem);
