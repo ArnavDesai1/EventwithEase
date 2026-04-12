@@ -2346,10 +2346,6 @@ textarea {
   gap: 10px;
 }
 
-.site-header-actions--drawer {
-  display: none;
-}
-
 .site-nav {
   display: flex;
   flex-wrap: wrap;
@@ -2386,6 +2382,11 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+/* Must follow .site-header-actions — same specificity was letting "flex" override drawer "none". */
+.site-header-actions.site-header-actions--drawer {
+  display: none;
 }
 
 .site-user-pill {
