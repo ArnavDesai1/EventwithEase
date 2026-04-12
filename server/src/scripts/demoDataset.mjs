@@ -389,6 +389,112 @@ export const demoEvents = [
     coverImage: u("photo-1554224155-6726b3ff858f"),
     ticketTypes: [{ name: "Professional", price: 3999, quantity: 100 }, { name: "Startup team (3)", price: 8999, quantity: 25 }],
   },
+  {
+    title: "Navi Mumbai SaaS Circle 2026",
+    description:
+      "Monthly PM/engineering dinner: PLG metrics, India pricing, and shipping cadences that do not burn the team.",
+    location: "Marriott Navi Mumbai",
+    city: "Navi Mumbai",
+    venueType: "physical",
+    category: "Tech",
+    date: "2026-05-29T18:00:00.000Z",
+    coverImage: u("photo-1522071820081-009f0129c71c"),
+    ticketTypes: [{ name: "Seat", price: 799, quantity: 70 }, { name: "Table (6)", price: 4200, quantity: 8 }],
+  },
+  {
+    title: "Gurgaon Boardgames & Beers 2026",
+    description: "Euro games, craft taps, and hosted teach tables — for people who actually finish rulebooks.",
+    location: "Sector 29 Social Outdoors, Gurgaon",
+    city: "Gurgaon",
+    venueType: "physical",
+    category: "Community",
+    date: "2026-06-15T16:00:00.000Z",
+    coverImage: u("photo-1606166188517-3e4ae55b2182"),
+    ticketTypes: [{ name: "Board pass", price: 449, quantity: 120 }, { name: "VIP table", price: 2200, quantity: 12 }],
+  },
+  {
+    title: "Surat Startup Stories 2026",
+    description: "Founder mic nights, angel office hours, and a bootstrapped-only breakout room.",
+    location: "Surat Diamond Bourse Convention Hall",
+    city: "Surat",
+    venueType: "physical",
+    category: "Business",
+    date: "2026-07-05T17:30:00.000Z",
+    coverImage: u("photo-1556761175-b413da4baf72"),
+    ticketTypes: [{ name: "Attendee", price: 399, quantity: 200 }, { name: "Pitch slot", price: 1499, quantity: 20 }],
+  },
+  {
+    title: "Thane Indie Night 2026",
+    description: "Warehouse acoustics, two regional openers, and a Mumbai headline under industrial string lights.",
+    location: "Thane Creek Studios",
+    city: "Thane",
+    venueType: "physical",
+    category: "Music",
+    date: "2026-08-02T19:30:00.000Z",
+    coverImage: u("photo-1501386761578-eac5c94b800a"),
+    ticketTypes: [
+      { name: "Standing", price: 599, earlyBirdPrice: 449, earlyBirdEndsAt: "2026-07-20", quantity: 400 },
+      { name: "Balcony", price: 1299, quantity: 80 },
+    ],
+  },
+  {
+    title: "Mysuru Heritage Walk & Talk 2026",
+    description: "Dawn walk through Devaraja Market, palace stories, and filter coffee with historians.",
+    location: "Mysuru Palace North Gate",
+    city: "Mysuru",
+    venueType: "physical",
+    category: "Community",
+    date: "2026-07-20T06:00:00.000Z",
+    coverImage: u("photo-1587474260584-136574528ed5"),
+    ticketTypes: [{ name: "Walk", price: 349, quantity: 80 }, { name: "Walk + breakfast", price: 649, quantity: 40 }],
+  },
+  {
+    title: "Visakhapatnam Beach Run 2026",
+    description: "5K/10K on RK Beach road, pacers, and a post-run idli pop-up.",
+    location: "RK Beach Start Arch, Visakhapatnam",
+    city: "Visakhapatnam",
+    venueType: "physical",
+    category: "Sports",
+    date: "2026-08-17T05:30:00.000Z",
+    coverImage: u("photo-1461896836934-ffe607ba8211"),
+    ticketTypes: [
+      { name: "5K", price: 699, earlyBirdPrice: 549, earlyBirdEndsAt: "2026-07-30", quantity: 1500 },
+      { name: "10K", price: 899, earlyBirdPrice: 699, earlyBirdEndsAt: "2026-07-30", quantity: 900 },
+    ],
+  },
+  {
+    title: "Indore Photography Walk 2026",
+    description: "Golden hour in old bazaars, mentor feedback loops, and a small group exhibit the same weekend.",
+    location: "Rajwada Chowk, Indore",
+    city: "Indore",
+    venueType: "physical",
+    category: "Art",
+    date: "2026-09-03T17:00:00.000Z",
+    coverImage: u("photo-1499781350541-7783eae6a698"),
+    ticketTypes: [{ name: "Participant", price: 599, quantity: 35 }, { name: "Rental gear add-on", price: 250, quantity: 15 }],
+  },
+  {
+    title: "Lucknow Ghazal Evening 2026",
+    description: "Intimate mehfil, tabla and harmonium forward mix, plus late-night kebab pairings.",
+    location: "Hazratganj Cultural Centre",
+    city: "Lucknow",
+    venueType: "physical",
+    category: "Music",
+    date: "2026-10-25T19:00:00.000Z",
+    coverImage: u("photo-1511671782779-c97d3d27a1d4"),
+    ticketTypes: [{ name: "Seated", price: 899, quantity: 200 }, { name: "Front row", price: 1599, quantity: 40 }],
+  },
+  {
+    title: "Ranchi Creator Lab 2026",
+    description: "YouTube + podcast studio tours, lighting clinics, and a sponsor-free creator mixer.",
+    location: "JSCA International Stadium Complex Annex",
+    city: "Ranchi",
+    venueType: "physical",
+    category: "Workshop",
+    date: "2026-06-28T11:00:00.000Z",
+    coverImage: u("photo-1531482615713-2afd69097998"),
+    ticketTypes: [{ name: "Lab pass", price: 499, quantity: 90 }, { name: "Mentor hour", price: 1299, quantity: 25 }],
+  },
 ];
 
 /** Multiple reviews per past event — eventTitle must match demoEvents.title */
@@ -453,7 +559,7 @@ export const bookingSeeds = [
   ["City Beats Live", "crowd.diya@eventwithease.com", "Early Bird", 2, false],
   ["City Beats Live", "crowd.kabir@eventwithease.com", "Lounge", 1, true],
   ["Founder Sprint Summit", "crowd.neha@eventwithease.com", "Delegate", 1, false],
-  ["Design Jam Workshop", "crowd.ishita@eventwithease.com", "Workshop Pass", 1, true],
+  ["Monsoon Jazz & Coffee — Kochi", "crowd.ishita@eventwithease.com", "Standard", 1, false],
   ["Open Source Saturday — Delhi", "crowd.arjun@eventwithease.com", "RSVP", 1, false],
   ["Chennai Marathon 2026 — Race Day", "crowd.meera@eventwithease.com", "10K", 1, false],
   ["Chennai Marathon 2026 — Race Day", "crowd.sid@eventwithease.com", "Half", 2, false],
@@ -495,7 +601,25 @@ export const extraDemoHosts = [
     instagramUrl: "https://instagram.com",
     websiteUrl: "https://eventwithease.com",
   },
+  {
+    name: "Luma Community House",
+    email: "luma.host@eventwithease.com",
+    password: "demo1234",
+    role: "organiser",
+    roles: ["organiser", "attendee"],
+    hostTagline: "Neighborhood culture · walks, games & slow evenings",
+    hostBio:
+      "We host low-key community nights, city walks, and creative meetups where strangers become regulars. Follow for weekend lineups.",
+    linkedinUrl: "https://linkedin.com/company/luma-community-house-demo",
+    twitterUrl: "https://x.com",
+    instagramUrl: "https://instagram.com",
+    websiteUrl: "https://eventwithease.com",
+  },
 ];
+
+/** Seed sets cancelledAt on this title (notification + booking-closed demo). */
+export const demoCancelledEventTitle = "Design Jam Workshop";
+export const demoCancelledEventAt = "2026-04-10T08:00:00.000Z";
 
 /** Map event title → host email (default: demo organiser). */
 export const eventHostEmailByTitle = {
@@ -505,6 +629,9 @@ export const eventHostEmailByTitle = {
   "Street Art Walk & Auction — Mumbai": "pulse.host@eventwithease.com",
   "Pune Coffee Championships 2026": "pulse.host@eventwithease.com",
   "Open Source Saturday — Delhi": "pulse.host@eventwithease.com",
+  "Thane Indie Night 2026": "pulse.host@eventwithease.com",
+  "Visakhapatnam Beach Run 2026": "pulse.host@eventwithease.com",
+  "Lucknow Ghazal Evening 2026": "pulse.host@eventwithease.com",
 
   "Founder Sprint Summit": "grid.host@eventwithease.com",
   "Goa Beach Startup Brunch 2025": "grid.host@eventwithease.com",
@@ -512,4 +639,10 @@ export const eventHostEmailByTitle = {
   "Women in Tech Career Fair 2026": "grid.host@eventwithease.com",
   "FinTech Compliance Masterclass": "grid.host@eventwithease.com",
   "Bengaluru Product Leadership Summit 2025": "grid.host@eventwithease.com",
+  "Surat Startup Stories 2026": "grid.host@eventwithease.com",
+  "Ranchi Creator Lab 2026": "grid.host@eventwithease.com",
+
+  "Gurgaon Boardgames & Beers 2026": "luma.host@eventwithease.com",
+  "Mysuru Heritage Walk & Talk 2026": "luma.host@eventwithease.com",
+  "Indore Photography Walk 2026": "luma.host@eventwithease.com",
 };

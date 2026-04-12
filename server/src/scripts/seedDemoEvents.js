@@ -19,6 +19,8 @@ import {
   bookingSeeds,
   extraDemoHosts,
   eventHostEmailByTitle,
+  demoCancelledEventTitle,
+  demoCancelledEventAt,
 } from "./demoDataset.mjs";
 
 function ticketCode() {
@@ -127,6 +129,11 @@ async function seedDemoEvents() {
     const result = await Event.updateOne({ title: demo.title }, { $set: { organiserId: hostUser._id } });
     if (result.modifiedCount) syncedDemoHosts += 1;
   }
+
+  await Event.updateOne(
+    { title: demoCancelledEventTitle },
+    { $set: { cancelledAt: new Date(demoCancelledEventAt) } }
+  );
 
   let insertedReviews = 0;
   for (const [title, rating, comment, email] of bulkReviews) {

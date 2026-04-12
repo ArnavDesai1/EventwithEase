@@ -25,6 +25,10 @@ router.post("/", requireAuth, async (req, res) => {
       return res.status(404).json({ message: "Event not found." });
     }
 
+    if (event.cancelledAt) {
+      return res.status(400).json({ message: "This event has been cancelled. New bookings are closed." });
+    }
+
     let appliedDiscount = null;
     if (normalizedCode) {
       appliedDiscount = (event.discountCodes || []).find((code) => {
@@ -122,7 +126,7 @@ router.post("/", requireAuth, async (req, res) => {
 router.get("/mine", requireAuth, async (req, res) => {
   try {
     const tickets = await Ticket.find({ userId: req.user._id })
-      .populate("eventId", "title date location category coverImage")
+      .populate("eventId", "title date location category coverImage cancelledAt ticketTypes")
       .sort({ createdAt: -1 });
 
     res.json(tickets);

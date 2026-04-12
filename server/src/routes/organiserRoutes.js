@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import Event from "../models/Event.js";
 import Follow from "../models/Follow.js";
+import Review from "../models/Review.js";
 import { hasRole, requireAuth } from "../middleware/auth.js";
 import optionalAuth from "../middleware/optionalAuth.js";
 
@@ -65,9 +66,61 @@ router.get("/:userId/profile", optionalAuth, async (req, res) => {
         : false,
     ]);
 
+    const eventIds = events.map((e) => e._id);
+    let trustScore = { averageRating: null, reviewCount: 0, eventsReviewed: 0 };
+    let recentReviews = [];
+
+    if (eventIds.length) {
+      const [agg, reviewDocs] = await Promise.all([
+        Review.aggregate([
+          { $match: { eventId: { $in: eventIds } } },
+          {
+            $group: {
+              _id: null,
+              avgRating: { $avg: "$rating" },
+              reviewCount: { $sum: 1 },
+              eventsReviewed: { $addToSet: "$eventId" },
+            },
+          },
+        ]),
+        Review.find({ eventId: { $in: eventIds } })
+          .sort({ createdAt: -1 })
+          .limit(18)
+          .populate("eventId", "title date")
+          .populate("attendeeId", "name")
+          .lean(),
+      ]);
+
+      if (agg[0]) {
+        trustScore = {
+          averageRating: Math.round(agg[0].avgRating * 10) / 10,
+          reviewCount: agg[0].reviewCount,
+          eventsReviewed: Array.isArray(agg[0].eventsReviewed) ? agg[0].eventsReviewed.length : 0,
+        };
+      }
+
+      recentReviews = reviewDocs.map((r) => ({
+        _id: r._id,
+        rating: r.rating,
+        comment: r.comment || "",
+        createdAt: r.createdAt,
+        eventId: r.eventId?._id,
+        eventTitle: r.eventId?.title || "Event",
+        attendeeName: r.attendeeId?.name || "Attendee",
+      }));
+    }
+
+    const now = new Date();
+    const upcomingEvents = events.filter((e) => new Date(e.date) >= now);
+    const pastEvents = events.filter((e) => new Date(e.date) < now).sort((a, b) => new Date(b.date) - new Date(a.date));
+
     res.json({
       host: publicHostFields(user),
       events,
+      upcomingEvents,
+      pastEvents,
+      trustScore,
+      recentReviews,
       followerCount,
       following: Boolean(following),
     });

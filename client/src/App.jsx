@@ -10,6 +10,7 @@ import AnimatedNumber from "./components/ui/AnimatedNumber.jsx";
 import TopNav from "./components/layout/TopNav.jsx";
 import SiteFooter from "./components/layout/SiteFooter.jsx";
 import QrScannerPanel from "./components/QrScannerPanel.jsx";
+import { useEventNotifications, formatMsAsCountdown } from "./hooks/useEventNotifications.js";
 import "./App.css";
 
 const emptyEventForm = {
@@ -50,6 +51,81 @@ function eventOrganiserDisplayName(event) {
   return null;
 }
 
+function NotificationsPanel({
+  open,
+  onClose,
+  notifications,
+  markRead,
+  markAllRead,
+  navigate,
+  flash,
+  desktopSupported,
+  desktopPermission,
+  requestDesktopPermission,
+}) {
+  if (!open) return null;
+  return (
+    <>
+      <button type="button" className="notif-backdrop" aria-label="Close notifications" onClick={onClose} />
+      <div className="notif-panel" role="dialog" aria-label="Notifications">
+        <div className="notif-panel-head">
+          <h2>Notifications</h2>
+          <div className="notif-panel-actions">
+            {notifications.length > 0 ? (
+              <button type="button" className="ghost-button compact-button" onClick={markAllRead}>
+                Mark all read
+              </button>
+            ) : null}
+            {desktopSupported && desktopPermission !== "granted" ? (
+              <button
+                type="button"
+                className="ghost-button compact-button"
+                onClick={() =>
+                  requestDesktopPermission().then((p) => {
+                    if (p === "granted") flash("Desktop alerts enabled for this browser.");
+                    else if (p === "denied") flash("Notifications blocked in browser settings.", true);
+                  })
+                }
+              >
+                Enable desktop alerts
+              </button>
+            ) : null}
+            <button type="button" className="ghost-button compact-button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+        <p className="notif-panel-hint">
+          Reminders use your saved tickets and wishlist. Open the app before your event so timers can run (mobile browsers may limit
+          background alerts).
+        </p>
+        <ul className="notif-list">
+          {notifications.length === 0 ? (
+            <li className="auth-note notif-empty">No alerts yet. Book a ticket or save events for early-bird and start-time reminders.</li>
+          ) : null}
+          {notifications.map((n) => (
+            <li key={n.id} className={`notif-item${n.read ? " is-read" : ""}`}>
+              <button
+                type="button"
+                className="notif-item-main"
+                onClick={() => {
+                  markRead(n.id);
+                  onClose();
+                  if (n.link) navigate(n.link);
+                }}
+              >
+                <strong>{n.title}</strong>
+                <span>{n.body}</span>
+                <span className="notif-item-time">{new Date(n.at).toLocaleString()}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,6 +155,8 @@ export default function App() {
   const [cityFilter, setCityFilter] = useState("");
   const [descriptionOutline, setDescriptionOutline] = useState("");
   const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]"));
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [countdownNow, setCountdownNow] = useState(() => Date.now());
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -105,6 +183,21 @@ export default function App() {
   const googleButtonRef = useRef(null);
   const authRoleRef = useRef(authForm.role);
   const lastOpenedEventIdRef = useRef("");
+
+  const {
+    notifications,
+    unreadCount,
+    markRead,
+    markAllRead,
+    requestDesktopPermission,
+    desktopSupported,
+    desktopPermission,
+  } = useEventNotifications({ user, myTickets, events, wishlist });
+
+  useEffect(() => {
+    const id = setInterval(() => setCountdownNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const userRoles = user?.roles?.length ? user.roles : user?.role ? [user.role] : [];
   const isOrganiser = userRoles.includes("organiser") || userRoles.includes("admin");
@@ -137,6 +230,27 @@ export default function App() {
     });
   }, [categoryFilter, cityFilter, dateFilter, events, priceFilter, search]);
 
+  const nextBookedEventCountdown = useMemo(() => {
+    const now = countdownNow;
+    let best = null;
+    for (const t of myTickets) {
+      const eid = String(t.eventId?._id || t.eventId || "");
+      if (!eid) continue;
+      const ev = events.find((e) => String(e._id) === eid);
+      const d = ev?.date || t.eventId?.date;
+      const title = ev?.title || t.eventId?.title;
+      if (!d) continue;
+      const start = new Date(d).getTime();
+      if (Number.isNaN(start) || start <= now) continue;
+      if (ev?.cancelledAt || t.eventId?.cancelledAt) continue;
+      if (!best || start < best.start) best = { start, title, eid };
+    }
+    if (!best) return null;
+    const left = best.start - now;
+    if (left > 72 * 60 * 60 * 1000) return null;
+    return { ...best, left };
+  }, [myTickets, events, countdownNow]);
+
   const hasSelectedBooking = useMemo(() => {
     if (!selectedEvent) return false;
     return myTickets.some((ticket) => String(ticket.eventId?._id) === String(selectedEvent._id));
@@ -146,6 +260,8 @@ export default function App() {
     if (!selectedEvent?.date) return false;
     return new Date(selectedEvent.date) < new Date();
   }, [selectedEvent]);
+
+  const selectedEventCancelled = useMemo(() => Boolean(selectedEvent?.cancelledAt), [selectedEvent?.cancelledAt]);
 
   const wishlistSet = useMemo(() => new Set(wishlist.map(String)), [wishlist]);
 
@@ -224,6 +340,20 @@ export default function App() {
     const match = location.pathname.match(/^\/host\/([a-fA-F0-9]{24})\/?$/);
     return match ? match[1] : null;
   }, [location.pathname]);
+
+  const hostNextCountdown = useMemo(() => {
+    if (!hostIdInPath || !hostPage?.events?.length) return null;
+    const now = countdownNow;
+    let best = null;
+    for (const e of hostPage.events) {
+      const t = new Date(e.date).getTime();
+      if (Number.isNaN(t) || t <= now) continue;
+      if (e.cancelledAt) continue;
+      if (!best || t < best.t) best = { t, title: e.title, id: e._id };
+    }
+    if (!best) return null;
+    return { ...best, left: best.t - now };
+  }, [hostIdInPath, hostPage?.events, countdownNow]);
 
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -597,7 +727,11 @@ export default function App() {
       }
       await Promise.all([loadReviews(id), loadNetworking(id)]);
       setProfileMode("attendee");
-      flash(`Loaded ${data.title}. Choose your ticket below.`);
+      flash(
+        data.cancelledAt
+          ? `${data.title} is cancelled — new tickets are not on sale.`
+          : `Loaded ${data.title}. Choose your ticket below.`
+      );
       requestAnimationFrame(() => {
         detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
@@ -737,6 +871,11 @@ export default function App() {
       return;
     }
 
+    if (selectedEvent.cancelledAt) {
+      setPaymentMessage("This event is cancelled — checkout is closed.");
+      return;
+    }
+
     try {
       localStorage.setItem(
         "eventwithease-pending-payment",
@@ -781,6 +920,11 @@ export default function App() {
       return;
     }
 
+    if (selectedEvent.cancelledAt) {
+      setPaymentMessage("This event is cancelled — checkout is closed.");
+      return;
+    }
+
     try {
       const response = await api.post("/payments/razorpay/order", {
         eventId: selectedEvent._id,
@@ -814,6 +958,12 @@ export default function App() {
 
     if (!selectedEvent || !items.length) {
       setBookingMessage("Select at least one ticket quantity first.");
+      return;
+    }
+
+    if (selectedEvent.cancelledAt) {
+      setBookingMessage("This event is cancelled — new tickets are not available.");
+      flash("This event is cancelled.", true);
       return;
     }
 
@@ -1326,6 +1476,27 @@ export default function App() {
     navigate(`/host/${organiserId}`);
   }
 
+  async function shareHostProfile() {
+    if (!hostPage?.host?.name) return;
+    const path = `/host/${hostPage.host._id}`;
+    const url = `${window.location.origin}${path}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `${hostPage.host.name} on EventwithEase`,
+          text: "See their events, reviews, and trust score.",
+          url,
+        });
+        flash("Share sheet opened.");
+      } else {
+        await navigator.clipboard.writeText(url);
+        flash("Host profile link copied.");
+      }
+    } catch (e) {
+      if (e?.name !== "AbortError") flash("Could not share link.", true);
+    }
+  }
+
   async function toggleFollowHost(organiserId) {
     if (!organiserId || !hostPage?.host) return;
     if (!user) {
@@ -1377,6 +1548,37 @@ export default function App() {
           onGoCheckIn={goCheckIn}
           onOpenAccount={openAccount}
           onLogout={logout}
+          notificationUnread={user ? unreadCount : 0}
+          onNotificationsToggle={() => setNotifOpen((o) => !o)}
+          notificationsOpen={notifOpen}
+        />
+        {user && nextBookedEventCountdown ? (
+          <div className="countdown-strip" role="status">
+            <button
+              type="button"
+              className="countdown-strip__btn"
+              onClick={() => {
+                setNotifOpen(false);
+                handleSelectEvent(nextBookedEventCountdown.eid);
+              }}
+            >
+              <span className="countdown-strip__label">Next ticketed event</span>
+              <span className="countdown-strip__title">{nextBookedEventCountdown.title}</span>
+              <span className="countdown-strip__time">{formatMsAsCountdown(nextBookedEventCountdown.left)}</span>
+            </button>
+          </div>
+        ) : null}
+        <NotificationsPanel
+          open={notifOpen}
+          onClose={() => setNotifOpen(false)}
+          notifications={notifications}
+          markRead={markRead}
+          markAllRead={markAllRead}
+          navigate={navigate}
+          flash={flash}
+          desktopSupported={desktopSupported}
+          desktopPermission={desktopPermission}
+          requestDesktopPermission={requestDesktopPermission}
         />
         <div className="app-flow">
           <div className="app-shell host-profile-page" id="ewe-host">
@@ -1406,6 +1608,9 @@ export default function App() {
                   </div>
                   <div className="host-profile-actions">
                     <span className="pill">{hostPage.followerCount} followers</span>
+                    <button type="button" className="ghost-button compact-button" onClick={() => shareHostProfile()}>
+                      Share profile
+                    </button>
                     {user && String(user.id) !== String(hostPage.host._id) ? (
                       <button
                         type="button"
@@ -1432,10 +1637,68 @@ export default function App() {
                     ) : null
                   )}
                 </div>
-                <h3 className="host-events-title">Events from this host</h3>
-                {hostPage.events?.length ? (
+                {hostNextCountdown ? (
+                  <div className="host-next-countdown" role="status">
+                    <span className="host-next-countdown__label">Next from this host</span>
+                    <button type="button" className="host-next-countdown__btn" onClick={() => handleSelectEvent(hostNextCountdown.id)}>
+                      <strong>{hostNextCountdown.title}</strong>
+                      <span className="host-next-countdown__time">{formatMsAsCountdown(hostNextCountdown.left)}</span>
+                    </button>
+                  </div>
+                ) : null}
+                {hostPage.trustScore?.reviewCount > 0 ? (
+                  <div className="host-trust-card">
+                    <div className="host-trust-ring" aria-hidden>
+                      {hostPage.trustScore.averageRating != null ? Number(hostPage.trustScore.averageRating).toFixed(1) : "—"}
+                    </div>
+                    <div>
+                      <strong>Trust score</strong>
+                      <p className="auth-note">
+                        From {hostPage.trustScore.reviewCount} public reviews across {hostPage.trustScore.eventsReviewed || 0}{" "}
+                        event{(hostPage.trustScore.eventsReviewed || 0) === 1 ? "" : "s"}.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="host-trust-card host-trust-card--muted">
+                    <div>
+                      <strong>Trust score</strong>
+                      <p className="auth-note">Reviews from past events will build this host’s public rating.</p>
+                    </div>
+                  </div>
+                )}
+                {hostPage.recentReviews?.length ? (
+                  <div className="host-reviews-block">
+                    <h3 className="host-events-title">Reviews on their events</h3>
+                    <ul className="host-review-list">
+                      {hostPage.recentReviews.map((r) => (
+                        <li key={r._id} className="host-review-item">
+                          <div className="host-review-top">
+                            <span className="pill">{r.rating}★</span>
+                            <span className="host-review-meta">
+                              {r.attendeeName} · {r.eventTitle}
+                            </span>
+                          </div>
+                          {r.comment ? <p className="host-review-comment">{r.comment}</p> : null}
+                          <button type="button" className="link-like-button" onClick={() => r.eventId && handleSelectEvent(r.eventId)}>
+                            View event
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <h3 className="host-events-title">Upcoming events</h3>
+                {(
+                  hostPage.upcomingEvents ??
+                  hostPage.events?.filter((e) => new Date(e.date) >= new Date()) ??
+                  []
+                ).length ? (
                   <div className="card-grid">
-                    {hostPage.events.map((event, index) => (
+                    {(hostPage.upcomingEvents ??
+                      hostPage.events?.filter((e) => new Date(e.date) >= new Date()) ??
+                      []
+                    ).map((event, index) => (
                       <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.05}s` }}>
                         <div
                           className="event-cover"
@@ -1446,6 +1709,11 @@ export default function App() {
                           }}
                         >
                           <span className="pill">{event.category}</span>
+                          {event.cancelledAt ? (
+                            <span className="pill pill--warn" style={{ marginLeft: 6 }}>
+                              Cancelled
+                            </span>
+                          ) : null}
                         </div>
                         <div className="event-content">
                           <p className="card-label">Hosted event</p>
@@ -1466,7 +1734,49 @@ export default function App() {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState label="No published events yet" />
+                  <p className="auth-note host-events-empty">No upcoming dates listed.</p>
+                )}
+                <h3 className="host-events-title">Past events</h3>
+                {(
+                  hostPage.pastEvents ??
+                  hostPage.events?.filter((e) => new Date(e.date) < new Date()) ??
+                  []
+                ).length ? (
+                  <div className="card-grid">
+                    {(hostPage.pastEvents ??
+                      hostPage.events?.filter((e) => new Date(e.date) < new Date()) ??
+                      []
+                    ).map((event, index) => (
+                      <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.05}s` }}>
+                        <div
+                          className="event-cover"
+                          style={{
+                            backgroundImage: event.coverImage
+                              ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
+                              : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                          }}
+                        >
+                          <span className="pill">{event.category}</span>
+                        </div>
+                        <div className="event-content">
+                          <p className="card-label">Past</p>
+                          <h3>{event.title}</h3>
+                          <p>{event.description}</p>
+                          <div className="meta-list">
+                            <span>{formatDate(event.date)}</span>
+                            {event.city ? <span>{event.city}</span> : null}
+                          </div>
+                          <div className="event-actions">
+                            <PrimaryButton type="button" onClick={() => handleSelectEvent(event._id)}>
+                              View details
+                            </PrimaryButton>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="auth-note host-events-empty">No past events in this profile yet.</p>
                 )}
               </section>
             ) : null}
@@ -1493,6 +1803,37 @@ export default function App() {
         onGoCheckIn={goCheckIn}
         onOpenAccount={openAccount}
         onLogout={logout}
+        notificationUnread={user ? unreadCount : 0}
+        onNotificationsToggle={() => setNotifOpen((o) => !o)}
+        notificationsOpen={notifOpen}
+      />
+      {user && nextBookedEventCountdown ? (
+        <div className="countdown-strip" role="status">
+          <button
+            type="button"
+            className="countdown-strip__btn"
+            onClick={() => {
+              setNotifOpen(false);
+              handleSelectEvent(nextBookedEventCountdown.eid);
+            }}
+          >
+            <span className="countdown-strip__label">Next ticketed event</span>
+            <span className="countdown-strip__title">{nextBookedEventCountdown.title}</span>
+            <span className="countdown-strip__time">{formatMsAsCountdown(nextBookedEventCountdown.left)}</span>
+          </button>
+        </div>
+      ) : null}
+      <NotificationsPanel
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        notifications={notifications}
+        markRead={markRead}
+        markAllRead={markAllRead}
+        navigate={navigate}
+        flash={flash}
+        desktopSupported={desktopSupported}
+        desktopPermission={desktopPermission}
+        requestDesktopPermission={requestDesktopPermission}
       />
       <div className="app-flow">
         <div className="app-shell">
@@ -1741,6 +2082,11 @@ export default function App() {
                   }}
                 >
                   <span className="pill">{event.category}</span>
+                  {event.cancelledAt ? (
+                    <span className="pill pill--warn" style={{ marginLeft: 6 }}>
+                      Cancelled
+                    </span>
+                  ) : null}
                 </div>
                 <div className="event-content">
                   <p className="card-label">Recommended</p>
@@ -1846,6 +2192,11 @@ export default function App() {
                     }}
                   >
                     <span className="pill">{event.category}</span>
+                    {event.cancelledAt ? (
+                      <span className="pill pill--warn" style={{ marginLeft: 6 }}>
+                        Cancelled
+                      </span>
+                    ) : null}
                   </div>
                   <div className="event-content">
                     <p className="card-label">Featured event</p>
@@ -1928,10 +2279,17 @@ export default function App() {
                 }}
               >
                 <span className="pill">{selectedEvent.category}</span>
+                {selectedEventCancelled ? <span className="pill pill--warn">Cancelled</span> : null}
               </div>
               <p className="card-label">Selected event</p>
               <h3>{selectedEvent.title}</h3>
               <p>{selectedEvent.description}</p>
+              {selectedEventCancelled ? (
+                <div className="cancel-banner" role="alert">
+                  <strong>Cancelled.</strong> New tickets are not on sale. If you already hold a ticket, check <em>My tickets</em> or
+                  request a refund where applicable.
+                </div>
+              ) : null}
               <div className="meta-list">
                 <span>{formatDate(selectedEvent.date)}</span>
                 {selectedEvent.city ? <span>{selectedEvent.city}</span> : null}
@@ -2097,59 +2455,65 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div className="ticket-type-list">
-                {selectedEvent.ticketTypes.map((ticket) => (
-                  <label key={ticket._id} className={`ticket-option${ticketCart[ticket._id] > 0 ? " active" : ""}`}>
-                    <span className="ticket-option-name">{ticket.name}</span>
-                    <strong>{formatCurrency(getTicketEffectivePrice(ticket))}</strong>
-                    {ticket.earlyBirdEndsAt && getTicketEffectivePrice(ticket) !== Number(ticket.price) && (
-                      <span className="early-bird-note">Early bird ends {formatDate(ticket.earlyBirdEndsAt)}</span>
-                    )}
+              {selectedEventCancelled ? (
+                <p className="booking-message">Ticketing is closed for this cancelled event.</p>
+              ) : (
+                <>
+                  <div className="ticket-type-list">
+                    {selectedEvent.ticketTypes.map((ticket) => (
+                      <label key={ticket._id} className={`ticket-option${ticketCart[ticket._id] > 0 ? " active" : ""}`}>
+                        <span className="ticket-option-name">{ticket.name}</span>
+                        <strong>{formatCurrency(getTicketEffectivePrice(ticket))}</strong>
+                        {ticket.earlyBirdEndsAt && getTicketEffectivePrice(ticket) !== Number(ticket.price) && (
+                          <span className="early-bird-note">Early bird ends {formatDate(ticket.earlyBirdEndsAt)}</span>
+                        )}
+                        <input
+                          className="ticket-quantity-input"
+                          type="number"
+                          min="0"
+                          inputMode="numeric"
+                          aria-label={`Quantity for ${ticket.name}`}
+                          value={ticketCart[ticket._id] || 0}
+                          onChange={(e) => updateTicketCart(ticket._id, e.target.value)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="checkout-summary">
+                    <span>Subtotal</span>
+                    <strong>{formatCurrency(checkoutSubtotal())}</strong>
+                  </div>
+                  <div className="checkout-discount">
                     <input
-                      className="ticket-quantity-input"
-                      type="number"
-                      min="0"
-                      inputMode="numeric"
-                      aria-label={`Quantity for ${ticket.name}`}
-                      value={ticketCart[ticket._id] || 0}
-                      onChange={(e) => updateTicketCart(ticket._id, e.target.value)}
+                      className="discount-input"
+                      placeholder="Discount code (optional)"
+                      value={discountCode}
+                      onChange={(e) => setDiscountCode(e.target.value)}
                     />
-                  </label>
-                ))}
-              </div>
-              <div className="checkout-summary">
-                <span>Subtotal</span>
-                <strong>{formatCurrency(checkoutSubtotal())}</strong>
-              </div>
-              <div className="checkout-discount">
-                <input
-                  className="discount-input"
-                  placeholder="Discount code (optional)"
-                  value={discountCode}
-                  onChange={(e) => setDiscountCode(e.target.value)}
-                />
-                <div className="discount-total">
-                  <span>Discount</span>
-                  <strong>-{formatCurrency(checkoutDiscountAmount(checkoutSubtotal()))}</strong>
-                </div>
-              </div>
-              <div className="checkout-summary checkout-total">
-                <span>Total</span>
-                <strong>{formatCurrency(checkoutTotal())}</strong>
-              </div>
-              <div className="payment-buttons">
-                <PrimaryButton type="button" onClick={handleStripeCheckout}>
-                  Pay with Stripe (test)
-                </PrimaryButton>
-                <button className="ghost-button" type="button" onClick={handleRazorpayCheckout}>
-                  Pay with Razorpay (test)
-                </button>
-                <button className="ghost-button" type="button" onClick={handleBookTickets}>
-                  Simulate payment
-                </button>
-              </div>
-              {paymentMessage && <p className="booking-message">{paymentMessage}</p>}
-              {bookingMessage && <p className="booking-message">{bookingMessage}</p>}
+                    <div className="discount-total">
+                      <span>Discount</span>
+                      <strong>-{formatCurrency(checkoutDiscountAmount(checkoutSubtotal()))}</strong>
+                    </div>
+                  </div>
+                  <div className="checkout-summary checkout-total">
+                    <span>Total</span>
+                    <strong>{formatCurrency(checkoutTotal())}</strong>
+                  </div>
+                  <div className="payment-buttons">
+                    <PrimaryButton type="button" onClick={handleStripeCheckout}>
+                      Pay with Stripe (test)
+                    </PrimaryButton>
+                    <button className="ghost-button" type="button" onClick={handleRazorpayCheckout}>
+                      Pay with Razorpay (test)
+                    </button>
+                    <button className="ghost-button" type="button" onClick={handleBookTickets}>
+                      Simulate payment
+                    </button>
+                  </div>
+                  {paymentMessage && <p className="booking-message">{paymentMessage}</p>}
+                  {bookingMessage && <p className="booking-message">{bookingMessage}</p>}
+                </>
+              )}
             </div>
           ) : (
             <EmptyState label="Select an event to book tickets" />

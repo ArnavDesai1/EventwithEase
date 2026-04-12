@@ -11,6 +11,9 @@ export default function TopNav({
   onGoCheckIn,
   onOpenAccount,
   onLogout,
+  notificationUnread = 0,
+  onNotificationsToggle,
+  notificationsOpen = false,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -93,6 +96,19 @@ export default function TopNav({
           </nav>
 
           <div className="site-header-actions site-header-actions--drawer">
+            {user && typeof onNotificationsToggle === "function" ? (
+              <button
+                type="button"
+                className={`site-header-ghost site-notif-trigger${notificationsOpen ? " is-active" : ""}`}
+                aria-label={`Notifications${notificationUnread > 0 ? `, ${notificationUnread} unread` : ""}`}
+                onClick={wrapNav(onNotificationsToggle)}
+              >
+                <span className="site-notif-bell" aria-hidden />
+                {notificationUnread > 0 ? (
+                  <span className="site-notif-badge">{notificationUnread > 9 ? "9+" : notificationUnread}</span>
+                ) : null}
+              </button>
+            ) : null}
             {user ? (
               <>
                 <span className="site-user-pill" title={user.email}>
@@ -115,6 +131,19 @@ export default function TopNav({
         </div>
 
         <div className="site-header-actions site-header-actions--desktop">
+          {user && typeof onNotificationsToggle === "function" ? (
+            <button
+              type="button"
+              className={`site-header-ghost site-notif-trigger${notificationsOpen ? " is-active" : ""}`}
+              aria-label={`Notifications${notificationUnread > 0 ? `, ${notificationUnread} unread` : ""}`}
+              onClick={onNotificationsToggle}
+            >
+              <span className="site-notif-bell" aria-hidden />
+              {notificationUnread > 0 ? (
+                <span className="site-notif-badge">{notificationUnread > 9 ? "9+" : notificationUnread}</span>
+              ) : null}
+            </button>
+          ) : null}
           {user ? (
             <>
               <span className="site-user-pill" title={user.email}>

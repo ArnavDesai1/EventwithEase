@@ -38,6 +38,7 @@ const eventSchema = new mongoose.Schema(
     venueType: { type: String, enum: ["physical", "online"], default: "physical" },
     category: { type: String, default: "General", trim: true },
     date: { type: Date, required: true },
+    cancelledAt: { type: Date, default: null },
     organiserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     discountCodes: { type: [discountCodeSchema], default: [] },
     ticketTypes: {

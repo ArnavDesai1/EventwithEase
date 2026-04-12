@@ -60,6 +60,9 @@ router.post("/stripe/checkout", requireAuth, async (req, res) => {
     const { eventId, items = [], discountCode = "" } = req.body;
     const event = await Event.findById(eventId);
     if (!event) return res.status(404).json({ message: "Event not found." });
+    if (event.cancelledAt) {
+      return res.status(400).json({ message: "This event has been cancelled. Checkout is closed." });
+    }
 
     const normalizedItems = items
       .map((item) => ({ ticketTypeId: item.ticketTypeId, quantity: Number(item.quantity) }))
@@ -110,6 +113,9 @@ router.post("/razorpay/order", requireAuth, async (req, res) => {
     const { eventId, items = [], discountCode = "" } = req.body;
     const event = await Event.findById(eventId);
     if (!event) return res.status(404).json({ message: "Event not found." });
+    if (event.cancelledAt) {
+      return res.status(400).json({ message: "This event has been cancelled. Checkout is closed." });
+    }
 
     const normalizedItems = items
       .map((item) => ({ ticketTypeId: item.ticketTypeId, quantity: Number(item.quantity) }))
