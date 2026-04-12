@@ -1702,3 +1702,43 @@ textarea {
   color: var(--ink-3);
   font-size: 0.82rem;
 }
+
+
+.review-block {
+  display: grid;
+  gap: 12px;
+}
+
+.review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.review-average {
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.review-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.review-card {
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--ink-2);
+}
+
+.review-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  color: var(--ink);
+}

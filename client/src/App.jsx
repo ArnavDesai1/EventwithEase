@@ -1449,19 +1449,25 @@ export default function App() {
                 )}
               </div>
 
-              <div className="detail-block">
-                <h4>Public reviews</h4>
-                {reviews.length > 0 && (
-                  <p className="auth-note">Average rating: {Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10}/5</p>
-                )}
+              <div className="detail-block review-block">
+                <div className="review-head">
+                  <h4>Public reviews</h4>
+                  {reviews.length > 0 && (
+                    <span className="review-average">{Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10}/5</span>
+                  )}
+                </div>
                 {reviews.length ? (
-                  <ul>
+                  <div className="review-grid">
                     {reviews.map((review) => (
-                      <li key={review._id}>
-                        <strong>{review.attendeeId?.name || "Attendee"}</strong>: {review.rating}/5 ? {review.comment || "(no comment)"}
-                      </li>
+                      <div key={review._id} className="review-card">
+                        <div className="review-meta">
+                          <strong>{review.attendeeId?.name || "Attendee"}</strong>
+                          <span>{"?".repeat(review.rating)}{"?".repeat(5 - review.rating)}</span>
+                        </div>
+                        <p>{review.comment || "(no comment)"}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 ) : (
                   <p className="auth-note">No reviews yet.</p>
                 )}

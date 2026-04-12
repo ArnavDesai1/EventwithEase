@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { connectDatabase } from "../config/db.js";
 import Event from "../models/Event.js";
 import User from "../models/User.js";
+import Review from "../models/Review.js";
 
 const demoOrganiser = {
   name: "Demo Organiser",
@@ -19,6 +20,21 @@ const demoAttendee = {
   password: "demo1234",
   role: "attendee",
 };
+
+const sampleReviewers = [
+  { name: "Aarav Sharma", email: "aarav.reviewer@eventwithease.com" },
+  { name: "Diya Kapoor", email: "diya.reviewer@eventwithease.com" },
+  { name: "Kabir Mehta", email: "kabir.reviewer@eventwithease.com" },
+];
+
+const demoReviews = [
+  { title: "Hack Night 2026", rating: 5, comment: "Fantastic energy and a super smooth check-in. Loved the mentor feedback." },
+  { title: "Hack Night 2026", rating: 4, comment: "Great lineup and solid logistics. Would love a bit more food variety." },
+  { title: "City Beats Live", rating: 5, comment: "Insane atmosphere and the crowd was amazing. Sound quality was top notch." },
+  { title: "Founder Sprint Summit", rating: 4, comment: "Practical sessions and useful takeaways. The networking block was valuable." },
+  { title: "Design Jam Workshop", rating: 5, comment: "Hands-on and well structured. The mentors were super helpful." },
+];
+
 const demoEvents = [
   {
     title: "Hack Night 2026",
@@ -114,6 +130,22 @@ async function seedDemoEvents() {
     await attendee.save();
   }
 
+  const reviewerUsers = [];
+  for (const reviewer of sampleReviewers) {
+    let reviewerUser = await User.findOne({ email: reviewer.email });
+    if (!reviewerUser) {
+      const hashedPassword = await bcrypt.hash("demo1234", 10);
+      reviewerUser = await User.create({
+        ...reviewer,
+        password: hashedPassword,
+        emailVerified: true,
+        role: "attendee",
+        roles: ["attendee", "organiser"],
+      });
+    }
+    reviewerUsers.push(reviewerUser);
+  }
+
   let inserted = 0;
   for (const event of demoEvents) {
     const exists = await Event.exists({ title: event.title });
@@ -121,6 +153,24 @@ async function seedDemoEvents() {
 
     await Event.create({ ...event, organiserId: organiser._id });
     inserted += 1;
+  }
+
+  // seed demo reviews
+  for (const review of demoReviews) {
+    const event = await Event.findOne({ title: review.title });
+    if (!event) continue;
+
+    const reviewer = reviewerUsers[Math.floor(Math.random() * reviewerUsers.length)] || attendee;
+    const exists = await Review.exists({ eventId: event._id, attendeeId: reviewer._id, comment: review.comment });
+    if (exists) continue;
+
+    await Review.create({
+      eventId: event._id,
+      attendeeId: reviewer._id,
+      rating: review.rating,
+      comment: review.comment,
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7),
+    });
   }
 
   console.log(`Demo seed complete. Inserted ${inserted} event(s).`);
