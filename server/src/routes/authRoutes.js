@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import User from "../models/User.js";
 import { createToken } from "../utils/token.js";
-import { requireAuth } from "../middleware/auth.js";
+import { hasRole, requireAuth } from "../middleware/auth.js";
 import { sendAppEmail } from "../utils/mailer.js";
 
 const router = express.Router();
@@ -32,6 +32,11 @@ function publicUser(user) {
     emailVerified: user.emailVerified,
     linkedinUrl: user.linkedinUrl || "",
     networkingOptIn: Boolean(user.networkingOptIn),
+    hostTagline: user.hostTagline || "",
+    hostBio: user.hostBio || "",
+    twitterUrl: user.twitterUrl || "",
+    instagramUrl: user.instagramUrl || "",
+    websiteUrl: user.websiteUrl || "",
   };
 }
 
@@ -290,10 +295,27 @@ router.post("/google", async (req, res) => {
 
 router.post("/profile", requireAuth, async (req, res) => {
   try {
-    const { linkedinUrl = "", networkingOptIn = false } = req.body;
+    const {
+      linkedinUrl = "",
+      networkingOptIn = false,
+      hostBio,
+      hostTagline,
+      twitterUrl,
+      instagramUrl,
+      websiteUrl,
+    } = req.body;
 
     req.user.linkedinUrl = String(linkedinUrl || "").trim();
     req.user.networkingOptIn = Boolean(networkingOptIn);
+
+    if (hasRole(req.user, "organiser") || hasRole(req.user, "admin")) {
+      if (hostBio !== undefined) req.user.hostBio = String(hostBio || "").trim().slice(0, 4000);
+      if (hostTagline !== undefined) req.user.hostTagline = String(hostTagline || "").trim().slice(0, 200);
+      if (twitterUrl !== undefined) req.user.twitterUrl = String(twitterUrl || "").trim().slice(0, 500);
+      if (instagramUrl !== undefined) req.user.instagramUrl = String(instagramUrl || "").trim().slice(0, 500);
+      if (websiteUrl !== undefined) req.user.websiteUrl = String(websiteUrl || "").trim().slice(0, 500);
+    }
+
     await req.user.save();
 
     res.json({ user: publicUser(req.user) });

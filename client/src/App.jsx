@@ -35,6 +35,21 @@ const emptyEventForm = {
 
 const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
 
+/** Populated `{ _id, name }` or raw ObjectId string from older responses. */
+function eventOrganiserRefId(event) {
+  const o = event?.organiserId;
+  if (o == null || o === "") return null;
+  if (typeof o === "string") return o;
+  const id = o._id ?? o.id;
+  return id != null ? String(id) : null;
+}
+
+function eventOrganiserDisplayName(event) {
+  const o = event?.organiserId;
+  if (o && typeof o === "object" && typeof o.name === "string" && o.name.trim()) return o.name.trim();
+  return null;
+}
+
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -54,6 +69,9 @@ export default function App() {
   const [checkInCode, setCheckInCode] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [checkInNotice, setCheckInNotice] = useState(null);
+  const [hostPage, setHostPage] = useState(null);
+  const [hostPageLoading, setHostPageLoading] = useState(false);
+  const [hostPageError, setHostPageError] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
@@ -199,6 +217,11 @@ export default function App() {
 
   const eventIdInPath = useMemo(() => {
     const match = location.pathname.match(/^\/event\/([a-fA-F0-9]{24})\/?$/);
+    return match ? match[1] : null;
+  }, [location.pathname]);
+
+  const hostIdInPath = useMemo(() => {
+    const match = location.pathname.match(/^\/host\/([a-fA-F0-9]{24})\/?$/);
     return match ? match[1] : null;
   }, [location.pathname]);
 
@@ -601,6 +624,41 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- URL-driven load only
   }, [loading, eventIdInPath, selectedEvent?._id]);
 
+  useEffect(() => {
+    if (!hostIdInPath) {
+      setHostPage(null);
+      setHostPageError(null);
+      setHostPageLoading(false);
+      return undefined;
+    }
+    if (loading) return undefined;
+
+    let cancelled = false;
+    setHostPageLoading(true);
+    setHostPageError(null);
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/organisers/${hostIdInPath}/profile`);
+        if (!cancelled) {
+          setHostPage(data);
+          setHostPageError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setHostPage(null);
+          setHostPageError(e.response?.data?.message || "Could not load this host.");
+        }
+      } finally {
+        if (!cancelled) setHostPageLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, hostIdInPath, user?.id]);
+
   async function handleCreateEvent(event) {
     event.preventDefault();
     try {
@@ -970,7 +1028,7 @@ export default function App() {
   }
 
   function generateEventSpeakers(event) {
-    return event.speakers?.length ? event.speakers : [event.organiserId?.name || "Event organiser", "Guest mentor"];
+    return event.speakers?.length ? event.speakers : [eventOrganiserDisplayName(event) || "Event organiser", "Guest mentor"];
   }
 
   function addSession() {
@@ -1263,6 +1321,34 @@ export default function App() {
     scrollToRef(authRef);
   }
 
+  function goHostProfile(organiserId) {
+    if (!organiserId) return;
+    navigate(`/host/${organiserId}`);
+  }
+
+  async function toggleFollowHost(organiserId) {
+    if (!organiserId || !hostPage?.host) return;
+    if (!user) {
+      flash("Sign in to follow hosts.", true);
+      navigate("/");
+      return;
+    }
+    if (String(user.id) === String(organiserId)) return;
+    try {
+      if (hostPage.following) {
+        const { data } = await api.delete(`/organisers/${organiserId}/follow`);
+        setHostPage((p) => (p ? { ...p, following: false, followerCount: data.followerCount } : p));
+        flash("Unfollowed host.");
+      } else {
+        const { data } = await api.post(`/organisers/${organiserId}/follow`);
+        setHostPage((p) => (p ? { ...p, following: true, followerCount: data.followerCount } : p));
+        flash("You follow this host — their events stay easy to find on Discover.");
+      }
+    } catch (e) {
+      flash(e.response?.data?.message || "Could not update follow.", true);
+    }
+  }
+
   if (loading) {
     return (
       <div className="screen-center">
@@ -1270,6 +1356,123 @@ export default function App() {
           <LoadingSpinner />
           <span className="loading-label">EventwithEase</span>
         </div>
+      </div>
+    );
+  }
+
+  if (hostIdInPath) {
+    return (
+      <div className="app-root">
+        <a className="skip-link" href="#ewe-host">
+          Skip to host profile
+        </a>
+        <TopNav
+          user={user}
+          isOrganiser={isOrganiser}
+          profileMode={profileMode}
+          onGoDiscover={goDiscover}
+          onGoBook={goBook}
+          onGoTickets={goTickets}
+          onGoOrganise={goOrganise}
+          onGoCheckIn={goCheckIn}
+          onOpenAccount={openAccount}
+          onLogout={logout}
+        />
+        <div className="app-flow">
+          <div className="app-shell host-profile-page" id="ewe-host">
+            {statusMessage ? <div className="banner success">{statusMessage}</div> : null}
+            {errorMessage ? <div className="banner error">{errorMessage}</div> : null}
+            <button type="button" className="ghost-button host-back-btn" onClick={() => navigate("/")}>
+              ← All events
+            </button>
+            {hostPageLoading ? (
+              <div className="host-page-loading">
+                <LoadingSpinner />
+                <span className="loading-label">Loading host…</span>
+              </div>
+            ) : null}
+            {!hostPageLoading && hostPageError ? (
+              <div className="panel">
+                <p className="auth-note">{hostPageError}</p>
+              </div>
+            ) : null}
+            {!hostPageLoading && hostPage ? (
+              <section className="panel host-profile-panel">
+                <div className="host-profile-head">
+                  <div>
+                    <p className="card-label">Host</p>
+                    <h2>{hostPage.host.name}</h2>
+                    {hostPage.host.hostTagline ? <p className="host-tagline">{hostPage.host.hostTagline}</p> : null}
+                  </div>
+                  <div className="host-profile-actions">
+                    <span className="pill">{hostPage.followerCount} followers</span>
+                    {user && String(user.id) !== String(hostPage.host._id) ? (
+                      <button
+                        type="button"
+                        className={hostPage.following ? "ghost-button" : "primary-button"}
+                        onClick={() => toggleFollowHost(hostPage.host._id)}
+                      >
+                        {hostPage.following ? "Following" : "Follow"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {hostPage.host.hostBio ? <p className="host-bio">{hostPage.host.hostBio}</p> : null}
+                <div className="host-social-row">
+                  {[
+                    ["LinkedIn", hostPage.host.linkedinUrl],
+                    ["X", hostPage.host.twitterUrl],
+                    ["Instagram", hostPage.host.instagramUrl],
+                    ["Website", hostPage.host.websiteUrl],
+                  ].map(([label, url]) =>
+                    url ? (
+                      <a key={label} className="ghost-button compact-button" href={url} target="_blank" rel="noreferrer">
+                        {label}
+                      </a>
+                    ) : null
+                  )}
+                </div>
+                <h3 className="host-events-title">Events from this host</h3>
+                {hostPage.events?.length ? (
+                  <div className="card-grid">
+                    {hostPage.events.map((event, index) => (
+                      <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.05}s` }}>
+                        <div
+                          className="event-cover"
+                          style={{
+                            backgroundImage: event.coverImage
+                              ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
+                              : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                          }}
+                        >
+                          <span className="pill">{event.category}</span>
+                        </div>
+                        <div className="event-content">
+                          <p className="card-label">Hosted event</p>
+                          <h3>{event.title}</h3>
+                          <p>{event.description}</p>
+                          <div className="meta-list">
+                            <span>{formatDate(event.date)}</span>
+                            {event.city ? <span>{event.city}</span> : null}
+                            <span>{event.location}</span>
+                          </div>
+                          <div className="event-actions">
+                            <PrimaryButton type="button" onClick={() => handleSelectEvent(event._id)}>
+                              View details
+                            </PrimaryButton>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState label="No published events yet" />
+                )}
+              </section>
+            ) : null}
+          </div>
+        </div>
+        <SiteFooter />
       </div>
     );
   }
@@ -1547,6 +1750,14 @@ export default function App() {
                       <span>{formatDate(event.date)}</span>
                       {event.city ? <span>{event.city}</span> : null}
                       <span>{event.location}</span>
+                      {eventOrganiserRefId(event) ? (
+                        <span className="meta-host-line">
+                          by{" "}
+                          <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(event))}>
+                            {eventOrganiserDisplayName(event) || "Host"}
+                          </button>
+                        </span>
+                      ) : null}
                     </div>
                   <div className="event-actions">
                     <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
@@ -1644,7 +1855,16 @@ export default function App() {
                       <span>{formatDate(event.date)}</span>
                       {event.city ? <span>{event.city}</span> : null}
                       <span>{event.location}</span>
-                      <span>by {event.organiserId?.name || "Organiser"}</span>
+                      <span className="meta-host-line">
+                        by{" "}
+                        {eventOrganiserRefId(event) ? (
+                          <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(event))}>
+                            {eventOrganiserDisplayName(event) || "Organiser"}
+                          </button>
+                        ) : (
+                          "Organiser"
+                        )}
+                      </span>
                     </div>
                     <div className="event-actions">
                       <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
@@ -1717,6 +1937,16 @@ export default function App() {
                 {selectedEvent.city ? <span>{selectedEvent.city}</span> : null}
                 <span>{selectedEvent.location}</span>
               </div>
+              {eventOrganiserRefId(selectedEvent) ? (
+                <p className="auth-note host-line-detail">
+                  Host:{" "}
+                  <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(selectedEvent))}>
+                    {eventOrganiserDisplayName(selectedEvent) || "View profile"}
+                  </button>
+                  {" · "}
+                  Follow them for their lineup of events.
+                </p>
+              ) : null}
               <div className="details-grid">
                 <div className="detail-block">
                   <h4>Agenda</h4>

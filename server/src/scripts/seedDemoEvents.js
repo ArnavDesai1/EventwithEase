@@ -17,6 +17,8 @@ import {
   bulkReviews,
   bulkFeedback,
   bookingSeeds,
+  extraDemoHosts,
+  eventHostEmailByTitle,
 } from "./demoDataset.mjs";
 
 function ticketCode() {
@@ -28,8 +30,46 @@ async function seedDemoEvents() {
 
   let organiser = await User.findOne({ email: demoOrganiser.email });
   if (!organiser) {
-    const hashedPassword = await bcrypt.hash(demoOrganiser.password, 10);
-    organiser = await User.create({ ...demoOrganiser, password: hashedPassword, emailVerified: true });
+    const { password, ...rest } = demoOrganiser;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    organiser = await User.create({ ...rest, password: hashedPassword, emailVerified: true });
+  } else {
+    organiser.hostBio = demoOrganiser.hostBio || organiser.hostBio;
+    organiser.hostTagline = demoOrganiser.hostTagline || organiser.hostTagline;
+    organiser.linkedinUrl = demoOrganiser.linkedinUrl || organiser.linkedinUrl;
+    organiser.twitterUrl = demoOrganiser.twitterUrl || organiser.twitterUrl;
+    organiser.instagramUrl = demoOrganiser.instagramUrl || organiser.instagramUrl;
+    organiser.websiteUrl = demoOrganiser.websiteUrl || organiser.websiteUrl;
+    if (demoOrganiser.roles?.length) organiser.roles = demoOrganiser.roles;
+    organiser.emailVerified = true;
+    await organiser.save();
+  }
+
+  const hostByEmail = new Map();
+  hostByEmail.set(demoOrganiser.email.toLowerCase(), organiser);
+
+  for (const hostProfile of extraDemoHosts) {
+    const { password, ...hostRest } = hostProfile;
+    let u = await User.findOne({ email: hostProfile.email });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    if (!u) {
+      u = await User.create({ ...hostRest, password: hashedPassword, emailVerified: true });
+    } else {
+      Object.assign(u, {
+        name: hostProfile.name,
+        role: hostProfile.role,
+        roles: hostProfile.roles,
+        hostBio: hostProfile.hostBio,
+        hostTagline: hostProfile.hostTagline,
+        linkedinUrl: hostProfile.linkedinUrl,
+        twitterUrl: hostProfile.twitterUrl,
+        instagramUrl: hostProfile.instagramUrl,
+        websiteUrl: hostProfile.websiteUrl,
+        emailVerified: true,
+      });
+      await u.save();
+    }
+    hostByEmail.set(hostProfile.email.toLowerCase(), u);
   }
 
   let attendee = await User.findOne({ email: demoAttendee.email });
@@ -72,8 +112,20 @@ async function seedDemoEvents() {
     const exists = await Event.exists({ title: event.title });
     if (exists) continue;
 
-    await Event.create({ ...event, organiserId: organiser._id });
+    const hostEmail = (eventHostEmailByTitle[event.title] || demoOrganiser.email).toLowerCase();
+    const hostUser = hostByEmail.get(hostEmail) || organiser;
+
+    await Event.create({ ...event, organiserId: hostUser._id });
     insertedEvents += 1;
+  }
+
+  /** Re-link organiser on every run so older DBs (seeded before host mapping) get clickable hosts. */
+  let syncedDemoHosts = 0;
+  for (const demo of demoEvents) {
+    const hostEmail = (eventHostEmailByTitle[demo.title] || demoOrganiser.email).toLowerCase();
+    const hostUser = hostByEmail.get(hostEmail) || organiser;
+    const result = await Event.updateOne({ title: demo.title }, { $set: { organiserId: hostUser._id } });
+    if (result.modifiedCount) syncedDemoHosts += 1;
   }
 
   let insertedReviews = 0;
@@ -159,6 +211,7 @@ async function seedDemoEvents() {
 
   console.log("— EventwithEase demo seed —");
   console.log(`Events inserted (new titles only): ${insertedEvents}`);
+  console.log(`Demo events host re-linked (updated rows): ${syncedDemoHosts}`);
   console.log(`Reviews inserted: ${insertedReviews}`);
   console.log(`Feedback inserted: ${insertedFeedback}`);
   console.log(`Bookings + tickets inserted: ${insertedBookings}`);

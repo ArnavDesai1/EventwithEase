@@ -1603,6 +1603,113 @@ textarea {
   background: var(--bg-3);
   color: var(--ink);
 }
+
+@media (max-width: 900px) {
+  .filter-bar {
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .filter-bar .search-input,
+  .filter-bar select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+.link-like-button {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--amber);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-align: left;
+}
+
+.link-like-button:hover {
+  color: var(--teal);
+}
+
+.host-profile-page {
+  padding-top: 16px;
+}
+
+.host-back-btn {
+  margin-bottom: 16px;
+}
+
+.host-page-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 36vh;
+  color: var(--ink-3);
+}
+
+.host-profile-panel .host-profile-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.host-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.host-tagline {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  margin-top: 8px;
+  max-width: 52ch;
+  line-height: 1.45;
+}
+
+.host-bio {
+  color: var(--ink-2);
+  line-height: 1.55;
+  margin-bottom: 16px;
+  max-width: 65ch;
+}
+
+.host-social-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.host-events-title {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  margin-bottom: 14px;
+  color: var(--ink);
+}
+
+.host-line-detail {
+  margin: 10px 0 14px;
+}
+
+.meta-host-line {
+  display: inline;
+}
+
 .ticket-quantity-input {
   width: 100%;
   max-width: 88px;

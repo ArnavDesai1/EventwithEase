@@ -8,6 +8,14 @@ export const demoOrganiser = {
   email: "demo.organiser@eventwithease.com",
   password: "demo1234",
   role: "organiser",
+  roles: ["organiser", "attendee"],
+  hostTagline: "Premium conferences & expos · Pan-India",
+  hostBio:
+    "Aria Eventworks produces flagship conferences, trade floors, and corporate summits with tight ops, sponsor-ready layouts, and attendee journeys that feel effortless from RSVP to exit.",
+  linkedinUrl: "https://linkedin.com/company/aria-eventworks-demo",
+  twitterUrl: "https://x.com",
+  instagramUrl: "https://instagram.com",
+  websiteUrl: "https://eventwithease.com",
 };
 
 export const demoAttendee = {
@@ -456,3 +464,52 @@ export const bookingSeeds = [
   ["Pune Coffee Championships 2026", "crowd.yash@eventwithease.com", "Spectator", 2, false],
   ["Ahmedabad Startup Grind 2026", "crowd.karan@eventwithease.com", "Attendee", 1, true],
 ];
+
+/** Additional demo hosts (seed creates accounts; use eventHostEmailByTitle to assign events). */
+export const extraDemoHosts = [
+  {
+    name: "Pulse Night Labs",
+    email: "pulse.host@eventwithease.com",
+    password: "demo1234",
+    role: "organiser",
+    roles: ["organiser", "attendee"],
+    hostTagline: "Live music & night culture · Western India",
+    hostBio:
+      "We programme open-air concerts, listening rooms, and artist-first collabs. Follow for presale drops and behind-the-scenes reels.",
+    linkedinUrl: "https://linkedin.com/company/pulse-night-labs-demo",
+    twitterUrl: "https://x.com",
+    instagramUrl: "https://instagram.com",
+    websiteUrl: "https://eventwithease.com",
+  },
+  {
+    name: "Founder Grid",
+    email: "grid.host@eventwithease.com",
+    password: "demo1234",
+    role: "organiser",
+    roles: ["organiser", "attendee"],
+    hostTagline: "Startup weekends, investor rooms & founder education",
+    hostBio:
+      "Founder Grid runs sprint summits, office-hour circuits, and sector deep dives — connecting builders with operators who have shipped at scale.",
+    linkedinUrl: "https://linkedin.com/company/founder-grid-demo",
+    twitterUrl: "https://x.com",
+    instagramUrl: "https://instagram.com",
+    websiteUrl: "https://eventwithease.com",
+  },
+];
+
+/** Map event title → host email (default: demo organiser). */
+export const eventHostEmailByTitle = {
+  "City Beats Live": "pulse.host@eventwithease.com",
+  "Monsoon Jazz & Coffee — Kochi": "pulse.host@eventwithease.com",
+  "North East Folk & Electronic — Shillong (stream)": "pulse.host@eventwithease.com",
+  "Street Art Walk & Auction — Mumbai": "pulse.host@eventwithease.com",
+  "Pune Coffee Championships 2026": "pulse.host@eventwithease.com",
+  "Open Source Saturday — Delhi": "pulse.host@eventwithease.com",
+
+  "Founder Sprint Summit": "grid.host@eventwithease.com",
+  "Goa Beach Startup Brunch 2025": "grid.host@eventwithease.com",
+  "Ahmedabad Startup Grind 2026": "grid.host@eventwithease.com",
+  "Women in Tech Career Fair 2026": "grid.host@eventwithease.com",
+  "FinTech Compliance Masterclass": "grid.host@eventwithease.com",
+  "Bengaluru Product Leadership Summit 2025": "grid.host@eventwithease.com",
+};
