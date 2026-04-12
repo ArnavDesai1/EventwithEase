@@ -1085,7 +1085,7 @@ export default function App() {
       {errorMessage && <div className="banner error">{errorMessage}</div>}
 
       <main className="grid-layout">
-        <section className={panelClass("panel auth-panel", ["organiser", "checkin"])} ref={authRef}>
+        <section className={panelClass("panel auth-panel full-width", ["organiser", "checkin"])} ref={authRef}>
           <div className="section-head auth-head">
             <h2>
               {user
@@ -1248,7 +1248,7 @@ export default function App() {
         </section>
 
         {profileMode === "attendee" && recommendedEvents.length > 0 && (
-        <section className={panelClass("panel span-two", ["attendee"])}>
+        <section className={panelClass("panel span-two full-width", ["attendee"])}>
           <div className="section-head">
             <h2>Recommended for you</h2>
             <p className="section-note">Based on your past tickets and saved events.</p>
@@ -1288,7 +1288,7 @@ export default function App() {
         )}
 
 {profileMode === "attendee" && (
-        <section className={panelClass("panel span-two", ["attendee"])} ref={browseRef}>
+        <section className={panelClass("panel span-two full-width", ["attendee"])} ref={browseRef}>
           <div className="section-head event-browser-head">
             <h2>Browse events</h2>
             <div className="filter-bar">
@@ -1871,7 +1871,7 @@ export default function App() {
               )}
             </section>
 
-            <section className={panelClass("panel span-two", ["checkin", "organiser"])} ref={checkinRef}>
+            <section className={panelClass("panel span-two full-width", ["checkin", "organiser"])} ref={checkinRef}>
               <div className="section-head">
                 <h2>Check-in dashboard</h2>
                 {dashboard && (

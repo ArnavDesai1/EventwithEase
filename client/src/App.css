@@ -296,7 +296,7 @@ textarea {
 
 .hero-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
   margin-top: 8px;
 }
@@ -451,9 +451,22 @@ textarea {
 
 .grid-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 24px;
 }
+
+.grid-layout > .panel {
+  grid-column: span 4;
+}
+
+.grid-layout > .panel.span-two {
+  grid-column: span 8;
+}
+
+.grid-layout > .panel.full-width {
+  grid-column: 1 / -1;
+}
+
 
 .panel {
   border-radius: var(--r-lg);
@@ -1188,7 +1201,7 @@ textarea {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 14px;
 }
 
