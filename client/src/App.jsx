@@ -1497,6 +1497,101 @@ export default function App() {
     }
   }
 
+  async function shareHostEvent(event) {
+    if (!event?._id) return;
+    const url = `${window.location.origin}/event/${event._id}`;
+    const hostLabel = hostPage?.host?.name || "this host";
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: event.title,
+          text: `Hosted by ${hostLabel} on EventwithEase — pricing and booking on the link.`,
+          url,
+        });
+        flash("Share sheet opened.");
+      } else {
+        await navigator.clipboard.writeText(url);
+        flash("Event link copied — send it anywhere.");
+      }
+    } catch (e) {
+      if (e?.name !== "AbortError") flash("Could not share event.", true);
+    }
+  }
+
+  function renderHostProfileEventCard(event, index, { past = false } = {}) {
+    const tix = Array.isArray(event.ticketTypes) ? event.ticketTypes : [];
+    const canBook = !past && !event.cancelledAt;
+    return (
+      <article className="event-card host-profile-event-card" key={event._id} style={{ animationDelay: `${index * 0.05}s` }}>
+        <div
+          className="event-cover"
+          style={{
+            backgroundImage: event.coverImage
+              ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
+              : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+          }}
+        >
+          <span className="pill">{event.category}</span>
+          {event.cancelledAt ? (
+            <span className="pill pill--warn" style={{ marginLeft: 6 }}>
+              Cancelled
+            </span>
+          ) : null}
+        </div>
+        <div className="event-content">
+          <p className="card-label">{past ? "Past event" : "Hosted event"}</p>
+          <h3>{event.title}</h3>
+          <p>{event.description}</p>
+          <div className="meta-list">
+            <span>{formatDate(event.date)}</span>
+            {event.city ? <span>{event.city}</span> : null}
+            <span>{event.location}</span>
+          </div>
+          {tix.length ? (
+            <div className="host-ticket-block">
+              <h4 className="host-ticket-block-title">Ticket pricing</h4>
+              <ul className="host-ticket-mini-list">
+                {tix.map((t) => {
+                  const eff = effectiveTicketPrice(t);
+                  const list = Number(t.price) || 0;
+                  const showWas = t.earlyBirdEndsAt && eff !== list;
+                  return (
+                    <li key={t._id || t.name}>
+                      <span className="host-ticket-name">{t.name}</span>
+                      <span className="host-ticket-price">
+                        {formatCurrency(eff)}
+                        {showWas ? <span className="host-ticket-was"> list {formatCurrency(list)}</span> : null}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : (
+            <p className="auth-note host-ticket-block-title">Ticket types will appear here when loaded.</p>
+          )}
+          <div className="host-event-actions-row">
+            <button type="button" className="ghost-button compact-button" onClick={() => shareHostEvent(event)}>
+              Share event
+            </button>
+            {canBook ? (
+              <PrimaryButton type="button" onClick={() => handleSelectEvent(event._id)}>
+                Book tickets
+              </PrimaryButton>
+            ) : (
+              <PrimaryButton type="button" onClick={() => handleSelectEvent(event._id)}>
+                {past ? "View event" : "View listing"}
+              </PrimaryButton>
+            )}
+          </div>
+          {canBook ? (
+            <p className="auth-note host-book-hint">Booking opens on the event page — you stay in the app (not the home feed).</p>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
+
   async function toggleFollowHost(organiserId) {
     if (!organiserId || !hostPage?.host) return;
     if (!user) {
@@ -1609,7 +1704,7 @@ export default function App() {
                   <div className="host-profile-actions">
                     <span className="pill">{hostPage.followerCount} followers</span>
                     <button type="button" className="ghost-button compact-button" onClick={() => shareHostProfile()}>
-                      Share profile
+                      Share host profile
                     </button>
                     {user && String(user.id) !== String(hostPage.host._id) ? (
                       <button
@@ -1698,40 +1793,7 @@ export default function App() {
                     {(hostPage.upcomingEvents ??
                       hostPage.events?.filter((e) => new Date(e.date) >= new Date()) ??
                       []
-                    ).map((event, index) => (
-                      <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.05}s` }}>
-                        <div
-                          className="event-cover"
-                          style={{
-                            backgroundImage: event.coverImage
-                              ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
-                              : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
-                          }}
-                        >
-                          <span className="pill">{event.category}</span>
-                          {event.cancelledAt ? (
-                            <span className="pill pill--warn" style={{ marginLeft: 6 }}>
-                              Cancelled
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="event-content">
-                          <p className="card-label">Hosted event</p>
-                          <h3>{event.title}</h3>
-                          <p>{event.description}</p>
-                          <div className="meta-list">
-                            <span>{formatDate(event.date)}</span>
-                            {event.city ? <span>{event.city}</span> : null}
-                            <span>{event.location}</span>
-                          </div>
-                          <div className="event-actions">
-                            <PrimaryButton type="button" onClick={() => handleSelectEvent(event._id)}>
-                              View details
-                            </PrimaryButton>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
+                    ).map((event, index) => renderHostProfileEventCard(event, index, { past: false }))}
                   </div>
                 ) : (
                   <p className="auth-note host-events-empty">No upcoming dates listed.</p>
@@ -1746,34 +1808,7 @@ export default function App() {
                     {(hostPage.pastEvents ??
                       hostPage.events?.filter((e) => new Date(e.date) < new Date()) ??
                       []
-                    ).map((event, index) => (
-                      <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.05}s` }}>
-                        <div
-                          className="event-cover"
-                          style={{
-                            backgroundImage: event.coverImage
-                              ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
-                              : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
-                          }}
-                        >
-                          <span className="pill">{event.category}</span>
-                        </div>
-                        <div className="event-content">
-                          <p className="card-label">Past</p>
-                          <h3>{event.title}</h3>
-                          <p>{event.description}</p>
-                          <div className="meta-list">
-                            <span>{formatDate(event.date)}</span>
-                            {event.city ? <span>{event.city}</span> : null}
-                          </div>
-                          <div className="event-actions">
-                            <PrimaryButton type="button" onClick={() => handleSelectEvent(event._id)}>
-                              View details
-                            </PrimaryButton>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
+                    ).map((event, index) => renderHostProfileEventCard(event, index, { past: true }))}
                   </div>
                 ) : (
                   <p className="auth-note host-events-empty">No past events in this profile yet.</p>
