@@ -59,7 +59,7 @@ export const demoEvents = [
     date: "2025-09-14T10:00:00.000Z",
     coverImage: u("photo-1470229722913-7c0e2dbbafd3"),
     agenda: ["10:00 Trade floor opens", "13:30 Line-array shootout", "16:00 Touring life Q&A", "18:00 Networking"],
-    speakers: ["Riya Sound Labs", "TourCraft India", "Demo Organiser"],
+    speakers: ["Riya Sound Labs", "TourCraft India", "Aria Eventworks"],
     faq: [
       { question: "Parking?", answer: "Paid parking at the venue; EV charging on level B1." },
       { question: "Badges?", answer: "Digital QR on your phone is enough at entry." },

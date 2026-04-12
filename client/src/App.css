@@ -2335,6 +2335,13 @@ textarea {
   display: contents;
 }
 
+.site-header-actions--desktop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .site-header-actions--drawer {
   display: none;
 }
@@ -2967,7 +2974,7 @@ body.nav-drawer-open {
   }
 
   .site-header-actions--desktop {
-    display: none;
+    display: none !important;
   }
 
   .site-nav-shell {
@@ -3002,7 +3009,7 @@ body.nav-drawer-open {
     text-align: left;
   }
 
-  .site-header-actions--drawer {
+  .site-nav-shell.is-open .site-header-actions--drawer {
     display: flex;
     flex-direction: column;
     align-items: stretch;

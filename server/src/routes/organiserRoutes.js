@@ -9,8 +9,16 @@ import optionalAuth from "../middleware/optionalAuth.js";
 
 const router = express.Router();
 
+/** 24-char hex only — avoids mongoose.isValid accepting arbitrary 12-byte strings. */
 function isValidObjectId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
+  return typeof id === "string" && /^[a-fA-F0-9]{24}$/.test(id);
+}
+
+async function isVisibleHostUser(user) {
+  if (!user) return false;
+  if (hasRole(user, "organiser") || hasRole(user, "admin")) return true;
+  const hosted = await Event.exists({ organiserId: user._id });
+  return Boolean(hosted);
 }
 
 function publicHostFields(user) {
@@ -51,7 +59,7 @@ router.get("/:userId/profile", optionalAuth, async (req, res) => {
     const user = await User.findById(userId)
       .select("name role roles hostBio hostTagline linkedinUrl twitterUrl instagramUrl websiteUrl createdAt")
       .lean();
-    if (!user || (!hasRole(user, "organiser") && !hasRole(user, "admin"))) {
+    if (!user || !(await isVisibleHostUser(user))) {
       return res.status(404).json({ message: "Host not found." });
     }
 
@@ -140,7 +148,7 @@ router.post("/:userId/follow", requireAuth, async (req, res) => {
     }
 
     const organiser = await User.findById(userId);
-    if (!organiser || (!hasRole(organiser, "organiser") && !hasRole(organiser, "admin"))) {
+    if (!organiser || !(await isVisibleHostUser(organiser))) {
       return res.status(404).json({ message: "Host not found." });
     }
 

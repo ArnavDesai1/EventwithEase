@@ -9,6 +9,7 @@ import Review from "../models/Review.js";
 import Feedback from "../models/Feedback.js";
 import Booking from "../models/Booking.js";
 import Ticket from "../models/Ticket.js";
+import { hasRole } from "../middleware/auth.js";
 import {
   demoOrganiser,
   demoAttendee,
@@ -135,6 +136,20 @@ async function seedDemoEvents() {
     { $set: { cancelledAt: new Date(demoCancelledEventAt) } }
   );
 
+  /** Ensure every event organiser can open host profile / follow APIs (fixes legacy users missing organiser role). */
+  let repairedOrganiserRoles = 0;
+  const distinctHosts = await Event.distinct("organiserId");
+  for (const oid of distinctHosts) {
+    if (!oid) continue;
+    const u = await User.findById(oid);
+    if (!u) continue;
+    if (hasRole(u, "organiser") || hasRole(u, "admin")) continue;
+    u.roles = [...new Set([...(u.roles || []), "organiser"])];
+    if (!hasRole(u, "admin")) u.role = "organiser";
+    await u.save();
+    repairedOrganiserRoles += 1;
+  }
+
   let insertedReviews = 0;
   for (const [title, rating, comment, email] of bulkReviews) {
     const event = await Event.findOne({ title });
@@ -219,6 +234,7 @@ async function seedDemoEvents() {
   console.log("— EventwithEase demo seed —");
   console.log(`Events inserted (new titles only): ${insertedEvents}`);
   console.log(`Demo events host re-linked (updated rows): ${syncedDemoHosts}`);
+  console.log(`Organiser roles repaired from event refs: ${repairedOrganiserRoles}`);
   console.log(`Reviews inserted: ${insertedReviews}`);
   console.log(`Feedback inserted: ${insertedFeedback}`);
   console.log(`Bookings + tickets inserted: ${insertedBookings}`);
