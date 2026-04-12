@@ -112,8 +112,10 @@ textarea {
   position: relative;
   z-index: 1;
   width: min(1360px, calc(100% - 40px));
+  max-width: 100%;
   margin: 0 auto;
   padding: 36px 0 80px;
+  min-width: 0;
 }
 
 @keyframes grain {
@@ -189,7 +191,7 @@ textarea {
   margin-bottom: 28px;
   display: grid;
   gap: 34px;
-  grid-template-columns: minmax(0, 1.72fr) minmax(300px, 0.92fr);
+  grid-template-columns: minmax(0, 1.72fr) minmax(min(280px, 100%), 0.92fr);
   overflow: hidden;
   border: 1px solid var(--border-2);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
@@ -253,6 +255,7 @@ textarea {
 .hero-copy-block {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .hero-kicker {
@@ -273,7 +276,8 @@ textarea {
   color: var(--ink);
   display: grid;
   gap: 2px;
-  max-width: 13.5ch;
+  max-width: min(13.5ch, 100%);
+  word-break: break-word;
 }
 
 .hero-accent {
@@ -290,13 +294,13 @@ textarea {
   color: var(--ink-2);
   font-size: 0.96rem;
   line-height: 1.5;
-  max-width: 42rem;
+  max-width: min(42rem, 100%);
   font-weight: 300;
 }
 
 .hero-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 12px;
   margin-top: 8px;
 }
@@ -453,6 +457,7 @@ textarea {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 24px;
+  min-width: 0;
 }
 
 .grid-layout > .panel {
@@ -810,8 +815,9 @@ textarea {
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 16px;
+  min-width: 0;
 }
 
 .event-card {
@@ -1379,9 +1385,19 @@ textarea {
 
 @media (max-width: 1024px) {
   .hero-panel,
-  .grid-layout,
   .hero-strip {
     grid-template-columns: 1fr;
+  }
+
+  /* Single column: reset spans or implicit columns are created and content overflows on mobile */
+  .grid-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .grid-layout > .panel,
+  .grid-layout > .panel.span-two,
+  .grid-layout > .panel.full-width {
+    grid-column: 1 / -1;
   }
 
   .span-two {
@@ -1395,28 +1411,49 @@ textarea {
 
 @media (max-width: 720px) {
   .app-shell {
-    width: min(100% - 20px, 1360px);
-    padding-top: 20px;
+    width: 100%;
+    max-width: 100%;
+    padding: 20px 16px 64px;
+    box-sizing: border-box;
   }
 
   .hero-panel {
-    padding: 32px 28px;
+    padding: 24px 18px;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .eyebrow {
     font-size: 2rem;
     gap: 10px;
+    flex-wrap: wrap;
   }
 
   .hero-panel h1 {
-    font-size: 2.7rem;
+    font-size: clamp(2rem, 10vw, 2.7rem);
     max-width: 100%;
+  }
+
+  .hero-cta-row {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .hero-cta-row .primary-button,
+  .hero-cta-row .hero-cta-secondary {
+    width: 100%;
+    max-width: 100%;
+    justify-content: center;
+  }
+
+  .hero-stats {
+    min-width: 0;
   }
 
   .two-column,
   .inline-form,
   .ticket-builder-row,
-  .ticket-card,
   .stats-grid,
   .section-head {
     grid-template-columns: 1fr;
@@ -1424,9 +1461,70 @@ textarea {
     align-items: stretch;
   }
 
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ticket-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ticket-actions {
+    align-self: center;
+  }
+
+  .panel {
+    padding: 22px 18px;
+    overflow: visible;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-bar {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .checkout-discount {
+    grid-template-columns: 1fr;
+  }
+
+  .discount-total {
+    text-align: left;
+  }
+
   .ticket-card svg {
     width: 72px !important;
     height: 72px !important;
+  }
+
+  .event-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .event-actions .primary-button,
+  .event-actions .ghost-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .details-card {
+    padding: 18px 16px;
+    overflow: visible;
+  }
+
+  .detail-block {
+    overflow: visible;
+    min-height: 0;
+  }
+
+  .share-actions-bar {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 
@@ -1673,6 +1771,7 @@ textarea {
   gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 18px 0;
+  min-width: 0;
 }
 
 .detail-block {
@@ -1862,8 +1961,10 @@ textarea {
 
 .app-root {
   min-height: 100vh;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: clip;
 }
 
 .skip-link {
@@ -1888,6 +1989,7 @@ textarea {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .site-header {
@@ -2346,6 +2448,43 @@ body.nav-drawer-open {
     position: relative;
     z-index: 46;
     row-gap: 12px;
+    width: min(1360px, calc(100% - 24px));
+    max-width: 100%;
+    align-items: center;
+  }
+}
+
+/* After 960px rules so narrow header layout wins on phones */
+@media (max-width: 720px) {
+  .site-header-inner {
+    width: calc(100% - 24px);
+    max-width: 100%;
+    padding: 10px 0;
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  .site-brand-block {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .site-brand-text {
+    min-width: 0;
+  }
+
+  .site-logo-type {
+    font-size: 1.05rem;
+  }
+
+  .site-logo-sub {
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+  }
+
+  .site-nav-toggle {
+    flex-shrink: 0;
+    margin-left: 0;
   }
 }
 
