@@ -3664,3 +3664,61 @@ body.nav-drawer-open {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* Portaled to document.body so .app-root overflow-x:clip cannot trap fixed overlays. */
+.auth-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px 32px;
+  overflow-y: auto;
+}
+
+.auth-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  background: rgba(5, 8, 14, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.auth-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(440px, 100%);
+  margin-top: max(6vh, 32px);
+  padding: 20px 22px 24px;
+  border-radius: var(--r-md, 14px);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+}
+
+.auth-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.auth-modal-title {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.auth-modal-tabs {
+  margin-bottom: 14px;
+}
+
+.host-auth-modal-form {
+  margin-top: 4px;
+}

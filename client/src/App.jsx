@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import api from "./api";
@@ -219,6 +220,7 @@ export default function App() {
   const [hostPage, setHostPage] = useState(null);
   const [hostPageLoading, setHostPageLoading] = useState(false);
   const [hostPageError, setHostPageError] = useState(null);
+  const [hostAuthModalOpen, setHostAuthModalOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
@@ -568,7 +570,7 @@ export default function App() {
       text: authMode === "signup" ? "signup_with" : "signin_with",
       width: googleButtonRef.current.offsetWidth || 260,
     });
-  }, [authMode, user, googleReady, authForm.role]);
+  }, [authMode, user, googleReady, authForm.role, hostAuthModalOpen]);
 
   useEffect(() => {
     const targetMap = {
@@ -845,6 +847,65 @@ export default function App() {
   }
 
   const updateAuthField = (key, value) => setAuthForm((current) => ({ ...current, [key]: value }));
+
+  /** Shared between #ewe-account and the host-profile auth modal (same ref for Google button). */
+  function renderGuestAuthFormFields() {
+    return (
+      <>
+        {(authMode === "login" || authMode === "signup") && (
+          <>
+            {authMode === "signup" && (
+              <input
+                placeholder="Full name"
+                value={authForm.name}
+                onChange={(e) => updateAuthField("name", e.target.value)}
+              />
+            )}
+            <input
+              type="email"
+              placeholder="Email address"
+              value={authForm.email}
+              onChange={(e) => updateAuthField("email", e.target.value)}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={authForm.password}
+              onChange={(e) => updateAuthField("password", e.target.value)}
+            />
+            <div className="oauth-wrap">
+              {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+                <div ref={googleButtonRef} className="google-button-slot" />
+              ) : (
+                <button className="google-disabled" type="button" disabled>
+                  Google sign-in not configured
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
+        {authMode === "forgot" && (
+          <input
+            type="email"
+            placeholder="Account email"
+            value={authForm.email}
+            onChange={(e) => updateAuthField("email", e.target.value)}
+          />
+        )}
+
+        {authMode === "reset" && (
+          <input
+            type="password"
+            placeholder="New password"
+            value={authForm.password}
+            onChange={(e) => updateAuthField("password", e.target.value)}
+          />
+        )}
+      </>
+    );
+  }
+
   const updateEventField = (key, value) => setEventForm((current) => ({ ...current, [key]: value }));
 
   const updateTicketType = (index, key, value) =>
@@ -938,6 +999,7 @@ export default function App() {
       localStorage.setItem("eventwithease-token", response.data.token);
       setUser(response.data.user);
       setAuthForm(emptyAuthForm);
+      setHostAuthModalOpen(false);
       await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds(), mergeWishlistAfterLogin()]);
       flash(authMode === "login" ? "Welcome back." : "Account created.");
     } catch (error) {
@@ -954,6 +1016,7 @@ export default function App() {
       });
       localStorage.setItem("eventwithease-token", googleResponse.data.token);
       setUser(googleResponse.data.user);
+      setHostAuthModalOpen(false);
       await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds(), mergeWishlistAfterLogin()]);
       flash("Signed in with Google.");
     } catch (error) {
@@ -1020,6 +1083,7 @@ export default function App() {
       setHostPage(null);
       setHostPageError(null);
       setHostPageLoading(false);
+      setHostAuthModalOpen(false);
       return undefined;
     }
     if (loading) return undefined;
@@ -1049,6 +1113,38 @@ export default function App() {
       cancelled = true;
     };
   }, [loading, hostIdInPath, user?.id]);
+
+  /** After navigating from /host/… to home, scroll to a section or account (see openAccount / nav handlers). */
+  useEffect(() => {
+    if (loading || hostIdInPath) return;
+    const scrollTo = location.state?.scrollTo;
+    const focusAccount = location.state?.focusAccount;
+    if (!scrollTo && !focusAccount) return;
+    const path = `${location.pathname}${location.search || ""}`;
+    navigate(path, { replace: true, state: {} });
+    requestAnimationFrame(() => {
+      if (scrollTo) document.getElementById(String(scrollTo))?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (focusAccount) authRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [loading, hostIdInPath, location.pathname, location.search, location.state, navigate]);
+
+  useEffect(() => {
+    if (!hostAuthModalOpen) return;
+    function onKey(event) {
+      if (event.key === "Escape") setHostAuthModalOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hostAuthModalOpen]);
+
+  useEffect(() => {
+    if (!hostAuthModalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [hostAuthModalOpen]);
 
   async function handleCreateEvent(event) {
     event.preventDefault();
@@ -1787,11 +1883,27 @@ export default function App() {
   }
 
   function goBook() {
+    if (hostIdInPath) {
+      navigate("/", { state: { scrollTo: "ewe-discover" } });
+      setProfileMode("attendee");
+      return;
+    }
     setProfileMode("attendee");
     scrollToRef(detailsRef);
   }
 
   function goTickets() {
+    if (hostIdInPath) {
+      if (!user) {
+        flash("Sign in to see My tickets.", true);
+        setHostAuthModalOpen(true);
+        setAuthMode("login");
+        return;
+      }
+      navigate("/", { state: { scrollTo: "ewe-tickets" } });
+      setProfileMode("attendee");
+      return;
+    }
     setProfileMode("attendee");
     scrollToRef(ticketsRef);
   }
@@ -1800,12 +1912,26 @@ export default function App() {
     if (!user) {
       setProfileMode("attendee");
       flash("Sign in with an organiser account to create and manage events.", true);
+      if (hostIdInPath) {
+        setHostAuthModalOpen(true);
+        setAuthMode("login");
+        return;
+      }
       scrollToRef(authRef);
       return;
     }
     if (!isOrganiser) {
       flash("This account cannot publish events. Use an organiser profile.", true);
+      if (hostIdInPath) {
+        navigate("/", { state: { scrollTo: "ewe-account" } });
+        return;
+      }
       scrollToRef(authRef);
+      return;
+    }
+    if (hostIdInPath) {
+      navigate("/", { state: { scrollTo: "ewe-organise" } });
+      setProfileMode("organiser");
       return;
     }
     setProfileMode("organiser");
@@ -1815,12 +1941,26 @@ export default function App() {
   function goCheckIn() {
     if (!user) {
       flash("Sign in to use the check-in panel.", true);
+      if (hostIdInPath) {
+        setHostAuthModalOpen(true);
+        setAuthMode("login");
+        return;
+      }
       scrollToRef(authRef);
       return;
     }
     if (!isOrganiser) {
       flash("Check-in is available to event hosts.", true);
+      if (hostIdInPath) {
+        navigate("/", { state: { scrollTo: "ewe-account" } });
+        return;
+      }
       scrollToRef(authRef);
+      return;
+    }
+    if (hostIdInPath) {
+      navigate("/", { state: { scrollTo: "ewe-checkin" } });
+      setProfileMode("checkin");
       return;
     }
     setProfileMode("checkin");
@@ -1828,6 +1968,15 @@ export default function App() {
   }
 
   function openAccount() {
+    if (hostIdInPath) {
+      if (user) {
+        navigate("/", { state: { focusAccount: true } });
+        return;
+      }
+      setHostAuthModalOpen(true);
+      setAuthMode("login");
+      return;
+    }
     scrollToRef(authRef);
   }
 
@@ -1956,7 +2105,12 @@ export default function App() {
     if (!organiserId || !hostPage?.host) return;
     if (!user) {
       flash("Sign in to follow hosts.", true);
-      navigate("/");
+      if (hostIdInPath) {
+        setHostAuthModalOpen(true);
+        setAuthMode("login");
+      } else {
+        navigate("/");
+      }
       return;
     }
     if (String(user.id) === String(organiserId)) return;
@@ -2183,6 +2337,80 @@ export default function App() {
             ) : null}
           </div>
         </div>
+        {hostAuthModalOpen
+          ? createPortal(
+              <div className="auth-modal-root" role="presentation">
+                <button
+                  type="button"
+                  className="auth-modal-backdrop"
+                  aria-label="Close sign in"
+                  onClick={() => setHostAuthModalOpen(false)}
+                />
+                <div
+                  className="auth-modal-panel"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="host-auth-modal-title"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="auth-modal-head">
+                    <h2 id="host-auth-modal-title" className="auth-modal-title">
+                      {authMode === "forgot"
+                        ? "Reset password"
+                        : authMode === "reset"
+                          ? "New password"
+                          : authMode === "signup"
+                            ? "Create account"
+                            : "Sign in"}
+                    </h2>
+                    <button type="button" className="ghost-button compact-button" onClick={() => setHostAuthModalOpen(false)}>
+                      Close
+                    </button>
+                  </div>
+                  {authMode === "forgot" || authMode === "reset" ? (
+                    <button className="ghost-button compact-button" type="button" onClick={() => setAuthMode("login")}>
+                      Back to login
+                    </button>
+                  ) : (
+                    <div className="switch-row auth-modal-tabs">
+                      <button className={`tab${authMode === "login" ? " active" : ""}`} type="button" onClick={() => setAuthMode("login")}>
+                        Login
+                      </button>
+                      <button className={`tab${authMode === "signup" ? " active" : ""}`} type="button" onClick={() => setAuthMode("signup")}>
+                        Signup
+                      </button>
+                    </div>
+                  )}
+                  <form className="stack-form auth-form host-auth-modal-form" onSubmit={handleAuthSubmit}>
+                    {renderGuestAuthFormFields()}
+                    <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
+                      {authMode === "login"
+                        ? "Login"
+                        : authMode === "signup"
+                          ? "Create account"
+                          : authMode === "forgot"
+                            ? "Send reset mail"
+                            : "Update password"}
+                    </PrimaryButton>
+                    {authMode === "login" && (
+                      <div className="auth-links">
+                        <button type="button" onClick={() => setAuthMode("forgot")}>
+                          Forgot password?
+                        </button>
+                        <button type="button" onClick={resendVerification}>
+                          Resend verify email
+                        </button>
+                      </div>
+                    )}
+                    {authMode === "signup" && <p className="auth-note">We will email a verification link before login is enabled.</p>}
+                    {authMode === "forgot" && <p className="auth-note">Enter your account email and we will send a reset link.</p>}
+                    {authMode === "reset" && <p className="auth-note">Set a fresh password from the secure reset link.</p>}
+                  </form>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
         <SiteFooter />
       </div>
     );
@@ -2480,56 +2708,7 @@ export default function App() {
             </div>
           ) : (
             <form className="stack-form auth-form" onSubmit={handleAuthSubmit}>
-              {(authMode === "login" || authMode === "signup") && (
-                <>
-                  {authMode === "signup" && (
-                    <input
-                      placeholder="Full name"
-                      value={authForm.name}
-                      onChange={(e) => updateAuthField("name", e.target.value)}
-                    />
-                  )}
-                  <input
-                    type="email"
-                    placeholder="Email address"
-                    value={authForm.email}
-                    onChange={(e) => updateAuthField("email", e.target.value)}
-                  />
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={authForm.password}
-                    onChange={(e) => updateAuthField("password", e.target.value)}
-                  />
-                  <div className="oauth-wrap">
-                    {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
-                      <div ref={googleButtonRef} className="google-button-slot" />
-                    ) : (
-                      <button className="google-disabled" type="button" disabled>
-                        Google sign-in not configured
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {authMode === "forgot" && (
-                <input
-                  type="email"
-                  placeholder="Account email"
-                  value={authForm.email}
-                  onChange={(e) => updateAuthField("email", e.target.value)}
-                />
-              )}
-
-              {authMode === "reset" && (
-                <input
-                  type="password"
-                  placeholder="New password"
-                  value={authForm.password}
-                  onChange={(e) => updateAuthField("password", e.target.value)}
-                />
-              )}
+              {renderGuestAuthFormFields()}
 
               <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
                 {authMode === "login"
