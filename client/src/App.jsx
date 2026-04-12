@@ -10,6 +10,7 @@ import AnimatedNumber from "./components/ui/AnimatedNumber.jsx";
 import TopNav from "./components/layout/TopNav.jsx";
 import SiteFooter from "./components/layout/SiteFooter.jsx";
 import QrScannerPanel from "./components/QrScannerPanel.jsx";
+import EventDashboardAnalytics from "./components/EventDashboardAnalytics.jsx";
 import { useEventNotifications, formatMsAsCountdown } from "./hooks/useEventNotifications.js";
 import "./App.css";
 
@@ -236,7 +237,15 @@ export default function App() {
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
   const [feedbackForm, setFeedbackForm] = useState({ rating: 5, feedback: "" });
   const [networkingList, setNetworkingList] = useState([]);
-  const [profileForm, setProfileForm] = useState({ linkedinUrl: "", networkingOptIn: false });
+  const [profileForm, setProfileForm] = useState({
+    linkedinUrl: "",
+    networkingOptIn: false,
+    hostTagline: "",
+    hostBio: "",
+    twitterUrl: "",
+    instagramUrl: "",
+    websiteUrl: "",
+  });
   const [googleReady, setGoogleReady] = useState(false);
   const detailsRef = useRef(null);
   const browseRef = useRef(null);
@@ -440,6 +449,11 @@ export default function App() {
     setProfileForm({
       linkedinUrl: user.linkedinUrl || "",
       networkingOptIn: Boolean(user.networkingOptIn),
+      hostTagline: user.hostTagline || "",
+      hostBio: user.hostBio || "",
+      twitterUrl: user.twitterUrl || "",
+      instagramUrl: user.instagramUrl || "",
+      websiteUrl: user.websiteUrl || "",
     });
   }, [user]);
 
@@ -1230,7 +1244,18 @@ export default function App() {
 
   async function saveProfile() {
     try {
-      const response = await api.post("/auth/profile", profileForm);
+      const body = {
+        linkedinUrl: profileForm.linkedinUrl,
+        networkingOptIn: profileForm.networkingOptIn,
+      };
+      if (isOrganiser) {
+        body.hostTagline = profileForm.hostTagline;
+        body.hostBio = profileForm.hostBio;
+        body.twitterUrl = profileForm.twitterUrl;
+        body.instagramUrl = profileForm.instagramUrl;
+        body.websiteUrl = profileForm.websiteUrl;
+      }
+      const response = await api.post("/auth/profile", body);
       setUser(response.data.user);
       flash("Profile updated.");
     } catch (error) {
@@ -2189,9 +2214,48 @@ export default function App() {
                   onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
                 />
                 <button className="ghost-button" type="button" onClick={saveProfile}>
-                  Save profile
+                  Save networking profile
                 </button>
               </div>
+              {isOrganiser ? (
+                <div className="host-profile-card">
+                  <p className="card-label">Public host profile</p>
+                  <p className="auth-note">
+                    Shown on your <strong>/host/…</strong> page and helps attendees trust you. You can still use the same account to buy
+                    tickets.
+                  </p>
+                  <input
+                    placeholder="Short tagline (e.g. Indie gigs · Mumbai)"
+                    value={profileForm.hostTagline}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, hostTagline: e.target.value }))}
+                  />
+                  <textarea
+                    placeholder="Bio — who you are, what events you run"
+                    rows={4}
+                    value={profileForm.hostBio}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, hostBio: e.target.value }))}
+                    className="host-bio-textarea"
+                  />
+                  <input
+                    placeholder="Website URL"
+                    value={profileForm.websiteUrl}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, websiteUrl: e.target.value }))}
+                  />
+                  <input
+                    placeholder="X (Twitter) URL"
+                    value={profileForm.twitterUrl}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, twitterUrl: e.target.value }))}
+                  />
+                  <input
+                    placeholder="Instagram URL"
+                    value={profileForm.instagramUrl}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, instagramUrl: e.target.value }))}
+                  />
+                  <button className="ghost-button" type="button" onClick={saveProfile}>
+                    Save host profile
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <form className="stack-form auth-form" onSubmit={handleAuthSubmit}>
@@ -3237,20 +3301,38 @@ export default function App() {
                       <span>Payout</span>
                     </div>
                   </div>
+                  <EventDashboardAnalytics
+                    analytics={dashboard.analytics}
+                    eventTitle={dashboard.event?.title}
+                  />
+                  <p className="analytics-table-heading">Everyone with a ticket (scan time when checked in)</p>
                   <div className="attendee-table">
                     {dashboard.attendees.map((ticket, index) => (
                       <div key={ticket._id} className="attendee-row" style={{ animationDelay: `${index * 0.04}s` }}>
-                        <span className="attendee-name">{ticket.userId?.name}</span>
-                        <span className="attendee-email">{ticket.userId?.email}</span>
-                        <span className="attendee-link">{ticket.userId?.networkingOptIn && ticket.userId?.linkedinUrl ? "LinkedIn shared" : "-"}</span>
-                        <span className="ticket-code">{ticket.ticketCode}</span>
-                        <span
-                          className={`attendee-status ${
-                            ticket.status === "checked-in" ? "is-checked-in" : ticket.status === "expired" ? "is-expired" : ""
-                          }`}
-                        >
-                          {ticket.status === "expired" ? "expired" : ticket.status}
-                        </span>
+                        <div className="attendee-row-main">
+                          <span className="attendee-name">{ticket.userId?.name}</span>
+                          <span className="attendee-email">{ticket.userId?.email}</span>
+                        </div>
+                        <div className="attendee-row-meta">
+                          <span className="attendee-link">
+                            {ticket.userId?.networkingOptIn && ticket.userId?.linkedinUrl ? "LinkedIn shared" : "—"}
+                          </span>
+                          <span className="ticket-code" title="Ticket QR code">
+                            {ticket.ticketCode}
+                          </span>
+                          <span className="attendee-checkin-at" title="When this pass was scanned at the door">
+                            {ticket.status === "checked-in" && ticket.checkedInAt
+                              ? new Date(ticket.checkedInAt).toLocaleString()
+                              : "—"}
+                          </span>
+                          <span
+                            className={`attendee-status ${
+                              ticket.status === "checked-in" ? "is-checked-in" : ticket.status === "expired" ? "is-expired" : ""
+                            }`}
+                          >
+                            {ticket.status === "expired" ? "expired" : ticket.status}
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -3,6 +3,7 @@ import Event from "../models/Event.js";
 import Ticket from "../models/Ticket.js";
 import Booking from "../models/Booking.js";
 import Refund from "../models/Refund.js";
+import Review from "../models/Review.js";
 import { hasRole, requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -139,10 +140,11 @@ router.get("/:id/dashboard", requireAuth, requireRole("organiser", "admin"), asy
       return res.status(403).json({ message: "You can only view your own event dashboard." });
     }
 
-    const [bookings, tickets, refunds] = await Promise.all([
+    const [bookings, tickets, refunds, reviewDocs] = await Promise.all([
       Booking.find({ eventId: event._id }).populate("attendeeId", "name email"),
       Ticket.find({ eventId: event._id }).populate("userId", "name email linkedinUrl networkingOptIn"),
       Refund.find({ eventId: event._id }),
+      Review.find({ eventId: event._id }).select("rating").lean(),
     ]);
 
     const revenue = bookings.reduce((sum, booking) => sum + booking.totalAmount, 0);
@@ -157,6 +159,46 @@ router.get("/:id/dashboard", requireAuth, requireRole("organiser", "admin"), asy
     }, 0);
     const payoutEstimate = Math.max(0, revenue - refundedAmount);
 
+    const ticketStatusBreakdown = {
+      booked: tickets.filter((t) => t.status === "booked").length,
+      checkedIn: tickets.filter((t) => t.status === "checked-in").length,
+      refunded: tickets.filter((t) => t.status === "refunded").length,
+      expired: tickets.filter((t) => t.status === "expired").length,
+    };
+
+    const registrationsByDayMap = new Map();
+    for (const t of tickets) {
+      const created = t.createdAt ? new Date(t.createdAt) : null;
+      if (!created || Number.isNaN(created.getTime())) continue;
+      const key = created.toISOString().slice(0, 10);
+      registrationsByDayMap.set(key, (registrationsByDayMap.get(key) || 0) + 1);
+    }
+    const registrationsByDay = [...registrationsByDayMap.entries()]
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const checkInByDayMap = new Map();
+    for (const t of tickets) {
+      if (t.status !== "checked-in" || !t.checkedInAt) continue;
+      const at = new Date(t.checkedInAt);
+      if (Number.isNaN(at.getTime())) continue;
+      const key = at.toISOString().slice(0, 10);
+      checkInByDayMap.set(key, (checkInByDayMap.get(key) || 0) + 1);
+    }
+    const checkInByDay = [...checkInByDayMap.entries()]
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const registrations = tickets.length;
+    const checkInRate =
+      registrations > 0 ? Math.round((checkedInCount / registrations) * 1000) / 10 : null;
+
+    let reviewAverage = null;
+    let reviewCount = reviewDocs.length;
+    if (reviewCount > 0) {
+      reviewAverage = Math.round((reviewDocs.reduce((s, r) => s + (Number(r.rating) || 0), 0) / reviewCount) * 10) / 10;
+    }
+
     res.json({
       event,
       stats: {
@@ -167,6 +209,17 @@ router.get("/:id/dashboard", requireAuth, requireRole("organiser", "admin"), asy
         refundedAmount,
         pendingRefunds: pendingRefunds.length,
         payoutEstimate,
+        checkInRate,
+        reviewAverage,
+        reviewCount,
+      },
+      analytics: {
+        ticketStatusBreakdown,
+        registrationsByDay,
+        checkInByDay,
+        checkInRate,
+        reviewAverage,
+        reviewCount,
       },
       attendees: tickets,
       refunds,

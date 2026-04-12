@@ -3294,3 +3294,211 @@ body.nav-drawer-open {
     text-align: left;
   }
 }
+
+/* ——— Host profile (account) + event dashboard analytics ——— */
+.host-profile-card {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+}
+
+.host-bio-textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.event-dashboard-analytics {
+  margin: 20px 0 16px;
+  padding: 18px 20px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.analytics-title {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.analytics-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.analytics-pill {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+
+.analytics-pill strong {
+  font-size: 1.15rem;
+  color: var(--amber);
+}
+
+.analytics-pill--muted {
+  opacity: 0.85;
+}
+
+.analytics-funnel {
+  margin-bottom: 20px;
+}
+
+.analytics-chart-label {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--teal);
+}
+
+.analytics-funnel-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 2fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+}
+
+.analytics-funnel-label {
+  color: var(--ink-2);
+}
+
+.analytics-funnel-track {
+  height: 10px;
+  border-radius: 99px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.analytics-funnel-fill {
+  height: 100%;
+  border-radius: 99px;
+  min-width: 0;
+  transition: width 0.35s var(--ease-out);
+}
+
+.analytics-funnel-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.analytics-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.analytics-chart-block {
+  min-width: 0;
+}
+
+.analytics-svg {
+  width: 100%;
+  max-height: 88px;
+  display: block;
+  color: var(--teal);
+}
+
+.analytics-svg--in {
+  color: var(--amber);
+}
+
+.analytics-x-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  margin-top: 6px;
+  font-size: 0.65rem;
+  color: var(--ink-3);
+  overflow: hidden;
+}
+
+.analytics-x-labels span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.analytics-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+
+.analytics-table-heading {
+  margin: 8px 0 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.attendee-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.attendee-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+}
+
+.attendee-checkin-at {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  max-width: 160px;
+}
+
+@media (max-width: 640px) {
+  .attendee-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .attendee-row-meta {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .analytics-funnel-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .analytics-funnel-count {
+    padding-left: 0;
+  }
+}
