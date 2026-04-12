@@ -46,7 +46,7 @@ With `MONGODB_URI` set, from `server`:
 npm run seed:demo
 ```
 
-Inserts **20+ events** (past + upcoming across cities), **25+ public reviews**, **private feedback** rows for the organiser dashboard, and **sample bookings with QR tickets** (including some checked-in) so browse, detail, and dashboards look like a real ticketing site. Safe to re-run: skips existing event titles and duplicate reviews/bookings per user.
+Inserts **20+ events** (past + upcoming across cities), **20+ public reviews**, **private feedback** rows for the organiser dashboard, and **sample bookings with QR tickets** (including some checked-in) so browse, detail, and dashboards look like a real ticketing site. Safe to re-run: skips existing event titles and duplicate reviews/bookings per user.
 
 Crowd reviewer accounts use password **`demo1234`** (emails `crowd.*@eventwithease.com`). See `docs/HACKATHON_COVERAGE.md` for hackathon spec vs implementation.
 
