@@ -195,7 +195,7 @@ function NotificationsPanel({
                         <span className="notif-preview-sub">
                           Starts {fmtDate(row.startsAt)} ·{" "}
                           <em className="notif-live-countdown">
-                            {fmtCountdown(row.leftMs, { withSeconds: row.leftMs < 7 * 86400000 * 1000 })}
+                            {fmtCountdown(row.leftMs)}
                           </em>{" "}
                           from now
                         </span>

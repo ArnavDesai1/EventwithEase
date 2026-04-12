@@ -87,17 +87,17 @@ function mergedEventForTicket(ticket, events) {
   return fromList || ticket.eventId;
 }
 
+/** Formats remaining time. Defaults to including seconds for live UI; pass `{ withSeconds: false }` for shorter static copy. */
 export function formatMsAsCountdown(ms, opts = {}) {
-  const { withSeconds = false } = opts;
-  if (ms <= 0) return "now";
+  const { withSeconds = true } = opts;
+  if (ms == null || !Number.isFinite(ms) || ms <= 0) return "now";
   const s = Math.floor(ms / 1000);
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  const showSec = withSeconds || d === 0;
-  if (d > 0) return showSec ? `${d}d ${h}h ${m}m ${sec}s` : `${d}d ${h}h ${m}m`;
-  if (h > 0) return showSec ? `${h}h ${m}m ${sec}s` : `${h}h ${m}m`;
+  if (d > 0) return withSeconds ? `${d}d ${h}h ${m}m ${sec}s` : `${d}d ${h}h ${m}m`;
+  if (h > 0) return withSeconds ? `${h}h ${m}m ${sec}s` : `${h}h ${m}m`;
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
 }
@@ -242,7 +242,7 @@ export function useEventNotifications({
           fire(`d1:${eid}`, {
             id: `d1:${eid}`,
             title: "Starts within 24 hours",
-            body: `${ev.title} — ${formatMsAsCountdown(delta)} to go.`,
+            body: `${ev.title} — ${formatMsAsCountdown(delta, { withSeconds: false })} to go.`,
             link: `/event/${eid}`,
             importance: "standard",
           });
@@ -250,7 +250,7 @@ export function useEventNotifications({
           fire(`w7:${eid}`, {
             id: `w7:${eid}`,
             title: "Event this week",
-            body: `${ev.title} — ${formatMsAsCountdown(delta)} until doors.`,
+            body: `${ev.title} — ${formatMsAsCountdown(delta, { withSeconds: false })} until doors.`,
             link: `/event/${eid}`,
             importance: "standard",
           });
