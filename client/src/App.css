@@ -1531,20 +1531,6 @@ textarea {
     justify-content: flex-start;
   }
 
-  .review-rail {
-    flex-direction: column;
-    overflow-x: visible;
-    margin: 0;
-    padding-bottom: 0;
-    scroll-snap-type: none;
-  }
-
-  .review-rail .review-card {
-    flex: none;
-    width: 100%;
-    max-width: 100%;
-  }
-
   .ticket-option {
     grid-template-columns: 1fr;
     grid-template-rows: auto;
@@ -1937,13 +1923,33 @@ textarea {
 .review-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
+}
+
+.review-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+  flex-shrink: 0;
+  max-width: min(200px, 48%);
 }
 
 .review-average {
   font-weight: 700;
   color: var(--amber);
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.review-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .review-grid {
@@ -1966,6 +1972,28 @@ textarea {
   scroll-snap-align: start;
   min-width: 0;
   word-break: break-word;
+}
+
+/* Must come after base .review-rail so mobile is not overridden by later rules */
+@media (max-width: 900px) {
+  .review-rail {
+    flex-direction: column;
+    overflow-x: visible;
+    margin: 0;
+    padding-bottom: 0;
+    scroll-snap-type: none;
+  }
+
+  .review-rail .review-card {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+    scroll-snap-align: none;
+  }
+
+  .review-summary {
+    max-width: 55%;
+  }
 }
 
 .review-explainer {

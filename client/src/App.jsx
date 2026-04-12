@@ -1786,9 +1786,18 @@ export default function App() {
               <div className="detail-block review-block">
                 <div className="review-head">
                   <h4>Public reviews</h4>
-                  {reviews.length > 0 && (
-                    <span className="review-average">{Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10}/5</span>
-                  )}
+                  {reviews.length > 0 ? (
+                    <div className="review-summary">
+                      <span className="review-average" title="Average star rating from all reviews">
+                        Avg.{" "}
+                        {(Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10).toFixed(1)}
+                        /5 stars
+                      </span>
+                      <span className="review-count">
+                        {reviews.length} {reviews.length === 1 ? "review" : "reviews"}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
                 <p className="auth-note review-explainer">
                   {hasSelectedBooking && selectedEventEnded
@@ -1798,7 +1807,7 @@ export default function App() {
                       : "Book a ticket first. After the event, return here for a public review and optional private note to the organiser."}
                 </p>
                 {reviews.length ? (
-                  <div className="review-rail" role="region" aria-label="Reviews carousel">
+                  <div className="review-rail" role="region" aria-label={`${reviews.length} public reviews`}>
                     {reviews.map((review) => (
                       <div key={review._id} className="review-card">
                         <div className="review-meta">
