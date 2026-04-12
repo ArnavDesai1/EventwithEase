@@ -15,6 +15,7 @@ import wishlistRoutes from "./routes/wishlistRoutes.js";
 import organiserRoutes from "./routes/organiserRoutes.js";
 import waitlistRoutes from "./routes/waitlistRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 import eventStaffRoutes from "./routes/eventStaffRoutes.js";
 import { handleOgEvent, handleOgHost } from "./routes/ogHtml.js";
 import { startFeedbackInviteScheduler } from "./jobs/feedbackInvites.js";
@@ -55,6 +56,7 @@ app.use("/api/checkin", checkinRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/waitlist", waitlistRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/analytics", analyticsRoutes);
 app.use("/api/event-staff", eventStaffRoutes);
 app.use("/api/organisers", organiserRoutes);
 

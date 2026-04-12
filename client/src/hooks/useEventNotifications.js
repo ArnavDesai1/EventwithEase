@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { playNotificationChime } from "../utils/notifSound.js";
 
 const INBOX_KEY = "ewe-notif-inbox-v1";
 const FIRED_KEY = "ewe-notif-fired-v1";
@@ -35,15 +36,17 @@ function mergedEventForTicket(ticket, events) {
   return fromList || ticket.eventId;
 }
 
-export function formatMsAsCountdown(ms) {
+export function formatMsAsCountdown(ms, opts = {}) {
+  const { withSeconds = false } = opts;
   if (ms <= 0) return "now";
   const s = Math.floor(ms / 1000);
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${m}m`;
+  const showSec = withSeconds || d === 0;
+  if (d > 0) return showSec ? `${d}d ${h}h ${m}m ${sec}s` : `${d}d ${h}h ${m}m`;
+  if (h > 0) return showSec ? `${h}h ${m}m ${sec}s` : `${h}h ${m}m`;
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
 }
@@ -68,6 +71,7 @@ export function useEventNotifications({
       if (prev.some((x) => x.id === item.id)) return prev;
       const next = [{ ...item, read: false, at: Date.now() }, ...prev].slice(0, 60);
       saveJson(INBOX_KEY, next);
+      playNotificationChime();
       if (canDesktop) {
         try {
           new Notification(item.title, { body: item.body, tag: item.id });
@@ -237,7 +241,7 @@ export function useEventNotifications({
     };
 
     run();
-    const id = setInterval(run, 30000);
+    const id = setInterval(run, 10000);
     return () => clearInterval(id);
   }, [user, myTickets, events, wishlist, followingList, fire]);
 

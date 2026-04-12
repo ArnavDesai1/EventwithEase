@@ -9,6 +9,8 @@ export default function TopNav({
   onGoTickets,
   onGoOrganise,
   onGoCheckIn,
+  onGoStats,
+  showStatsLink = false,
   onOpenAccount,
   onLogout,
   notificationUnread = 0,
@@ -93,6 +95,11 @@ export default function TopNav({
             >
               Check-in
             </button>
+            {showStatsLink && typeof onGoStats === "function" ? (
+              <button type="button" className="site-nav-link" onClick={wrapNav(onGoStats)}>
+                Stats
+              </button>
+            ) : null}
           </nav>
 
           <div className="site-header-actions site-header-actions--drawer">

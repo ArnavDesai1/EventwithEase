@@ -14,6 +14,7 @@ import QrScannerPanel from "./components/QrScannerPanel.jsx";
 import EventDashboardAnalytics from "./components/EventDashboardAnalytics.jsx";
 import { useEventNotifications, formatMsAsCountdown } from "./hooks/useEventNotifications.js";
 import { ogEventUrl } from "./utils/shareUrls.js";
+import { isNotifSoundEnabled, setNotifSoundEnabled } from "./utils/notifSound.js";
 import "./App.css";
 
 const emptyEventForm = {
@@ -79,6 +80,8 @@ function NotificationsPanel({
   formatMsAsCountdown: fmtCountdown,
   formatDate: fmtDate,
 }) {
+  const [soundOn, setSoundOn] = useState(() => isNotifSoundEnabled());
+
   if (!open) return null;
 
   function goEventFromPanel(eid) {
@@ -112,14 +115,26 @@ function NotificationsPanel({
                 Enable desktop alerts
               </button>
             ) : null}
+            <button
+              type="button"
+              className="ghost-button compact-button"
+              onClick={() => {
+                const next = !soundOn;
+                setNotifSoundEnabled(next);
+                setSoundOn(next);
+                flash(next ? "Milestone sounds on." : "Milestone sounds muted.");
+              }}
+            >
+              {soundOn ? "Mute sounds" : "Unmute sounds"}
+            </button>
             <button type="button" className="ghost-button compact-button" onClick={onClose}>
               Close
             </button>
           </div>
         </div>
         <p className="notif-panel-hint">
-          Milestone alerts (this week, 24h, 1h, etc.) fire while this tab is open. Refunds, ticket expiry after events, and host refund
-          summaries also land here. Followed hosts alert when they add new upcoming events.
+          Countdowns tick every second while this panel is open. Milestone alerts (week-of, 24h, 1h, etc.) check every ~10s while the tab is
+          open — a short chime plays unless muted. Refunds and host summaries also land here.
         </p>
 
         {ticketPreview.length > 0 ? (
@@ -135,7 +150,11 @@ function NotificationsPanel({
                     ) : (
                       <>
                         <span className="notif-preview-sub">
-                          Starts {fmtDate(row.startsAt)} · <em>{fmtCountdown(row.leftMs)}</em> from now
+                          Starts {fmtDate(row.startsAt)} ·{" "}
+                          <em className="notif-live-countdown">
+                            {fmtCountdown(row.leftMs, { withSeconds: row.leftMs < 7 * 86400000 * 1000 })}
+                          </em>{" "}
+                          from now
                         </span>
                         <span className="notif-preview-sub notif-preview-muted">
                           Paid cancellations: tiered fee (minimal if within 5h of booking), auto-approved ~24h, until 10h before doors.
@@ -247,6 +266,8 @@ export default function App() {
   const [adminEvents, setAdminEvents] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminSnapshotLoaded, setAdminSnapshotLoaded] = useState(false);
+  const [statsOverview, setStatsOverview] = useState(null);
+  const [statsLoadError, setStatsLoadError] = useState(null);
   const [resetToken, setResetToken] = useState("");
   const [refunds, setRefunds] = useState([]);
   const [hostRefunds, setHostRefunds] = useState([]);
@@ -276,6 +297,7 @@ export default function App() {
   const googleButtonRef = useRef(null);
   const authRoleRef = useRef(authForm.role);
   const lastOpenedEventIdRef = useRef("");
+  const pageViewPostedRef = useRef({ path: "", at: 0 });
 
   const refreshFollowing = useCallback(async () => {
     if (!user) {
@@ -314,6 +336,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (loading) return;
+    const p = location.pathname || "/";
+    const now = Date.now();
+    if (pageViewPostedRef.current.path === p && now - pageViewPostedRef.current.at < 22000) return;
+    pageViewPostedRef.current = { path: p, at: now };
+    api.post("/analytics/pageview", { path: p }).catch(() => {});
+  }, [loading, location.pathname]);
+
+  useEffect(() => {
     refreshFollowing();
   }, [refreshFollowing, user?.id]);
 
@@ -333,6 +364,41 @@ export default function App() {
 
   const userRoles = user?.roles?.length ? user.roles : user?.role ? [user.role] : [];
   const isOrganiser = userRoles.includes("organiser") || userRoles.includes("admin");
+  const isAdminUser = Boolean(user && userRoles.includes("admin"));
+
+  const fanProgress = useMemo(() => {
+    if (!user) return null;
+    const tickets = myTickets.filter((t) => t.status !== "refunded" && t.status !== "expired").length;
+    const wl = wishlist.length;
+    const fol = followingHosts.length;
+    const score = tickets * 45 + wl * 12 + fol * 20 + (myTickets.length >= 2 ? 25 : 0);
+    const level = Math.min(99, Math.floor(score / 150) + 1);
+    const levelStart = (level - 1) * 150;
+    const levelEnd = level * 150;
+    const span = Math.max(levelEnd - levelStart, 1);
+    const pct = Math.min(100, ((score - levelStart) / span) * 100);
+    return { score, level, levelEnd, pct, tickets, wl, fol };
+  }, [user, myTickets, wishlist, followingHosts]);
+
+  useEffect(() => {
+    if (!statsPath || !isAdminUser) return;
+    let cancelled = false;
+    setStatsLoadError(null);
+    void (async () => {
+      try {
+        const { data } = await api.get("/analytics/overview");
+        if (!cancelled) setStatsOverview(data);
+      } catch (e) {
+        if (!cancelled) {
+          setStatsOverview(null);
+          setStatsLoadError(e.response?.data?.message || "Could not load stats.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [statsPath, isAdminUser, user?.id]);
 
   const filteredEvents = useMemo(() => {
     const cityNeedle = cityFilter.trim().toLowerCase();
@@ -500,6 +566,8 @@ export default function App() {
     const match = location.pathname.match(/^\/host\/([a-fA-F0-9]{24})\/?$/);
     return match ? match[1] : null;
   }, [location.pathname]);
+
+  const statsPath = useMemo(() => /^\/stats\/?$/.test(location.pathname), [location.pathname]);
 
   useEffect(() => {
     const baseTitle = "EventwithEase — Events, tickets & check-in";
@@ -1795,6 +1863,10 @@ export default function App() {
     scrollToRef(browseRef);
   }
 
+  function goStats() {
+    navigate("/stats");
+  }
+
   function getSelectedEventShareUrl() {
     if (!selectedEvent?._id) return "";
     return `${window.location.origin}/event/${selectedEvent._id}`;
@@ -2142,6 +2214,186 @@ export default function App() {
     );
   }
 
+  if (statsPath) {
+    const pvRows = statsOverview?.pageviewsByDay || [];
+    const maxPvDay = Math.max(1, ...pvRows.map((d) => d.count));
+    const tpRows = statsOverview?.topPaths || [];
+    const maxPath = Math.max(1, ...tpRows.map((p) => p.count));
+    const catRows = statsOverview?.ticketsByCategory || [];
+    const maxCat = Math.max(1, ...catRows.map((c) => c.count));
+    const t = statsOverview?.totals;
+
+    return (
+      <div className="app-root">
+        <a className="skip-link" href="#stats-main">
+          Skip to stats
+        </a>
+        <TopNav
+          user={user}
+          isOrganiser={isOrganiser}
+          profileMode={profileMode}
+          onGoDiscover={goDiscover}
+          onGoBook={goBook}
+          onGoTickets={goTickets}
+          onGoOrganise={goOrganise}
+          onGoCheckIn={goCheckIn}
+          onGoStats={goStats}
+          showStatsLink={isAdminUser}
+          onOpenAccount={openAccount}
+          onLogout={logout}
+          notificationUnread={user ? unreadCount : 0}
+          onNotificationsToggle={() => setNotifOpen((o) => !o)}
+          notificationsOpen={notifOpen}
+        />
+        {user && nextBookedEventCountdown ? (
+          <div className="countdown-strip" role="status">
+            <button
+              type="button"
+              className="countdown-strip__btn"
+              onClick={() => {
+                setNotifOpen(false);
+                handleSelectEvent(nextBookedEventCountdown.eid);
+              }}
+            >
+              <span className="countdown-strip__label">Next ticketed event</span>
+              <span className="countdown-strip__title">{nextBookedEventCountdown.title}</span>
+              <span className="countdown-strip__time">{formatMsAsCountdown(nextBookedEventCountdown.left)}</span>
+            </button>
+          </div>
+        ) : null}
+        <NotificationsPanel
+          open={notifOpen}
+          onClose={() => setNotifOpen(false)}
+          notifications={notifications}
+          markRead={markRead}
+          markAllRead={markAllRead}
+          navigate={navigate}
+          flash={flash}
+          desktopSupported={desktopSupported}
+          desktopPermission={desktopPermission}
+          requestDesktopPermission={requestDesktopPermission}
+          ticketPreview={ticketNotificationsPreview}
+          followingHosts={followingHosts}
+          formatMsAsCountdown={formatMsAsCountdown}
+          formatDate={formatDate}
+        />
+        <div className="app-flow">
+          <main id="stats-main" className="stats-page app-shell">
+            {statusMessage ? <div className="banner success">{statusMessage}</div> : null}
+            {errorMessage ? <div className="banner error">{errorMessage}</div> : null}
+            <div className="section-head">
+              <h1 className="stats-page-title">Site stats</h1>
+              <p className="section-note">Page views from this app, ticket volume, and revenue totals (admin).</p>
+            </div>
+            {!isAdminUser ? (
+              <div className="panel stats-gate-panel">
+                <h2>Admin only</h2>
+                <p className="auth-note">Analytics are visible to administrator accounts. Sign in with an admin user to see graphs.</p>
+                {!user ? (
+                  <PrimaryButton type="button" onClick={openAccount}>
+                    Sign in
+                  </PrimaryButton>
+                ) : null}
+              </div>
+            ) : statsLoadError ? (
+              <p className="banner error">{statsLoadError}</p>
+            ) : !statsOverview ? (
+              <div className="host-page-loading">
+                <LoadingSpinner />
+                <span className="loading-label">Loading analytics…</span>
+              </div>
+            ) : (
+              <>
+                <div className="stats-kpi-grid">
+                  <div className="stat-card stats-kpi-card">
+                    <strong>{t?.users ?? "—"}</strong>
+                    <span>Users</span>
+                  </div>
+                  <div className="stat-card stats-kpi-card">
+                    <strong>{t?.events ?? "—"}</strong>
+                    <span>Events</span>
+                  </div>
+                  <div className="stat-card stats-kpi-card">
+                    <strong>{t?.tickets ?? "—"}</strong>
+                    <span>Tickets issued</span>
+                  </div>
+                  <div className="stat-card stats-kpi-card">
+                    <strong>{formatCurrency(t?.revenue ?? 0)}</strong>
+                    <span>Booking revenue (gross)</span>
+                  </div>
+                  <div className="stat-card stats-kpi-card">
+                    <strong>{t?.bookings ?? "—"}</strong>
+                    <span>Bookings</span>
+                  </div>
+                </div>
+                <div className="panel stats-chart-panel">
+                  <h2 className="stats-chart-title">Page views (14 days)</h2>
+                  {pvRows.length === 0 ? (
+                    <p className="auth-note">No page views recorded yet — browse the app to populate this chart.</p>
+                  ) : (
+                    <ul className="stats-bar-list" aria-label="Page views by day">
+                      {pvRows.map((row) => (
+                        <li key={row.day} className="stats-bar-row">
+                          <span className="stats-bar-label">{row.day}</span>
+                          <div className="stats-bar-track">
+                            <div className="stats-bar-fill stats-bar-fill--teal" style={{ width: `${(row.count / maxPvDay) * 100}%` }} />
+                          </div>
+                          <span className="stats-bar-count">{row.count}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="stats-two-col">
+                  <div className="panel stats-chart-panel">
+                    <h2 className="stats-chart-title">Top paths (30 days)</h2>
+                    {tpRows.length === 0 ? (
+                      <p className="auth-note">No data yet.</p>
+                    ) : (
+                      <ul className="stats-bar-list">
+                        {tpRows.map((row) => (
+                          <li key={row.path} className="stats-bar-row">
+                            <span className="stats-bar-label stats-bar-label--path">{row.path}</span>
+                            <div className="stats-bar-track">
+                              <div className="stats-bar-fill stats-bar-fill--amber" style={{ width: `${(row.count / maxPath) * 100}%` }} />
+                            </div>
+                            <span className="stats-bar-count">{row.count}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="panel stats-chart-panel">
+                    <h2 className="stats-chart-title">Tickets by event category</h2>
+                    {catRows.length === 0 ? (
+                      <p className="auth-note">No tickets yet.</p>
+                    ) : (
+                      <ul className="stats-bar-list">
+                        {catRows.map((row) => (
+                          <li key={row.category} className="stats-bar-row">
+                            <span className="stats-bar-label">{row.category}</span>
+                            <div className="stats-bar-track">
+                              <div
+                                className="stats-bar-fill stats-bar-fill--violet"
+                                style={{ width: `${(row.count / maxCat) * 100}%` }}
+                              />
+                            </div>
+                            <span className="stats-bar-count">{row.count}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </main>
+        </div>
+        <SiteFooter />
+      </div>
+    );
+  }
+
   if (hostIdInPath) {
     return (
       <div className="app-root">
@@ -2157,6 +2409,8 @@ export default function App() {
           onGoTickets={goTickets}
           onGoOrganise={goOrganise}
           onGoCheckIn={goCheckIn}
+          onGoStats={goStats}
+          showStatsLink={isAdminUser}
           onOpenAccount={openAccount}
           onLogout={logout}
           notificationUnread={user ? unreadCount : 0}
@@ -2430,6 +2684,8 @@ export default function App() {
         onGoTickets={goTickets}
         onGoOrganise={goOrganise}
         onGoCheckIn={goCheckIn}
+        onGoStats={goStats}
+        showStatsLink={isAdminUser}
         onOpenAccount={openAccount}
         onLogout={logout}
         notificationUnread={user ? unreadCount : 0}
@@ -2573,6 +2829,21 @@ export default function App() {
               <p className="card-label">Signed in as</p>
               <p className="user-email">{user.email}</p>
               <span className="pill">{userRoles.join(" + ")}</span>
+              {fanProgress ? (
+                <div className="fan-progress-card" aria-label="Your event explorer progress">
+                  <div className="fan-progress-head">
+                    <span className="fan-level-badge">Lv {fanProgress.level}</span>
+                    <span className="fan-progress-title">Event explorer</span>
+                    <span className="fan-progress-xp">{fanProgress.score} XP</span>
+                  </div>
+                  <div className="fan-progress-track" title={`Next level at ${fanProgress.levelEnd} XP`}>
+                    <div className="fan-progress-fill" style={{ width: `${fanProgress.pct}%` }} />
+                  </div>
+                  <p className="auth-note fan-progress-hint">
+                    +45 XP per active ticket · +12 wishlist · +20 per host you follow · +25 when you hold 2+ tickets
+                  </p>
+                </div>
+              ) : null}
               <div className="profile-switch">
                 <button
                   className={`tab${profileMode === "attendee" ? " active" : ""}`}

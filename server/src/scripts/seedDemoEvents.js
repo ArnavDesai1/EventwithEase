@@ -14,7 +14,7 @@ import {
   demoOrganiser,
   demoAttendee,
   crowdUsers,
-  demoEvents,
+  demoEvents as importedDemoEvents,
   bulkReviews,
   bulkFeedback,
   bookingSeeds,
@@ -22,8 +22,12 @@ import {
   eventHostEmailByTitle,
   hostEmailForDemoEventTitle,
   demoCancelledEventTitle,
-  demoCancelledEventAt,
 } from "./demoDataset.mjs";
+import { applyRollingDatesToDemoEvents } from "./rollingDemoDates.mjs";
+
+/** Set DEMO_FIXED_DATES=1 to keep static dates from demoDataset.mjs (e.g. screenshots). */
+const USE_ROLLING_DATES = process.env.DEMO_FIXED_DATES !== "1";
+const demoEvents = USE_ROLLING_DATES ? applyRollingDatesToDemoEvents(importedDemoEvents) : importedDemoEvents;
 
 function ticketCode() {
   return `EWE-${uuidv4().slice(0, 8).toUpperCase()}`;
@@ -154,9 +158,24 @@ async function seedDemoEvents() {
     syncedDemoHosts += 1;
   }
 
+  if (USE_ROLLING_DATES) {
+    for (const demo of demoEvents) {
+      await Event.updateOne(
+        { title: demo.title },
+        {
+          $set: {
+            date: new Date(demo.date),
+            discountCodes: demo.discountCodes || [],
+            ticketTypes: demo.ticketTypes,
+          },
+        }
+      );
+    }
+  }
+
   await Event.updateOne(
     { title: demoCancelledEventTitle },
-    { $set: { cancelledAt: new Date(demoCancelledEventAt) } }
+    { $set: { cancelledAt: new Date(Date.now() - 3 * 86400000) } }
   );
 
   /** Ensure every event organiser can open host profile / follow APIs (fixes legacy users missing organiser role). */
@@ -255,6 +274,7 @@ async function seedDemoEvents() {
   }
 
   console.log("— EventwithEase demo seed —");
+  console.log(`Rolling dates from “now”: ${USE_ROLLING_DATES} (set DEMO_FIXED_DATES=1 to disable)`);
   console.log(`Events inserted (new titles only): ${insertedEvents}`);
   console.log(`Demo events host re-linked (updated rows): ${syncedDemoHosts}`);
   console.log(`Organiser roles repaired from event refs: ${repairedOrganiserRoles}`);
