@@ -1,0 +1,27 @@
+{
+  "name": "eventwithease-server",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "seed:demo": "node src/scripts/seedDemoEvents.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "EventwithEase backend API",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.23.0",
+    "nodemailer": "^8.0.5",
+    "stripe": "^22.0.1",
+    "uuid": "^13.0.0"
+  }
+}

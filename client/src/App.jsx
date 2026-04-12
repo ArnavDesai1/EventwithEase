@@ -1,0 +1,1995 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import api from "./api";
+import "./App.css";
+
+const emptyEventForm = {
+  title: "",
+  description: "",
+  location: "",
+  category: "Tech",
+  date: "",
+  coverImage: "",
+  venueMapUrl: "",
+  agenda: [],
+  speakers: [],
+  faq: [],
+  sessions: [],
+  discountCodes: [],
+  ticketTypes: [
+    { name: "General", price: "499", quantity: "50", earlyBirdPrice: "", earlyBirdEndsAt: "" },
+    { name: "VIP", price: "999", quantity: "20", earlyBirdPrice: "", earlyBirdEndsAt: "" },
+  ],
+};
+
+const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+function formatDate(value) {
+  return new Date(value).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function AnimatedNumber({ value }) {
+  const [display, setDisplay] = useState(0);
+  const prev = useRef(0);
+
+  useEffect(() => {
+    const target = Number(value) || 0;
+    const start = prev.current;
+    prev.current = target;
+    if (start === target) return;
+
+    const diff = target - start;
+    const duration = 700;
+    const startTime = performance.now();
+
+    function step(now) {
+      const t = Math.min((now - startTime) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(start + diff * ease));
+      if (t < 1) requestAnimationFrame(step);
+    }
+
+    requestAnimationFrame(step);
+  }, [value]);
+
+  return <>{display}</>;
+}
+
+function PrimaryButton({ children, onClick, type = "button", style }) {
+  const ref = useRef(null);
+
+  function handleClick(event) {
+    const button = ref.current;
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+    button.style.setProperty("--x", `${((event.clientX - rect.left) / rect.width) * 100}%`);
+    button.style.setProperty("--y", `${((event.clientY - rect.top) / rect.height) * 100}%`);
+    onClick?.(event);
+  }
+
+  return (
+    <button ref={ref} className="primary-button" type={type} onClick={handleClick} style={style}>
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({ label }) {
+  return (
+    <div className="empty-state">
+      <span className="empty-state-mark">O</span>
+      {label}
+    </div>
+  );
+}
+
+function LoadingSpinner() {
+  return <div className="loading-spinner" />;
+}
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [authMode, setAuthMode] = useState("login");
+  const [authForm, setAuthForm] = useState(emptyAuthForm);
+  const [eventForm, setEventForm] = useState(emptyEventForm);
+  const [events, setEvents] = useState([]);
+  const [myEvents, setMyEvents] = useState([]);
+  const [myTickets, setMyTickets] = useState([]);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedTicketTypeId, setSelectedTicketTypeId] = useState("");
+  const [ticketQuantity, setTicketQuantity] = useState(1);
+  const [ticketCart, setTicketCart] = useState({});
+  const [discountCode, setDiscountCode] = useState("");
+  const [dashboard, setDashboard] = useState(null);
+  const [checkInCode, setCheckInCode] = useState("");
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [priceFilter, setPriceFilter] = useState("all");
+  const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]"));
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [profileMode, setProfileMode] = useState("attendee");
+  const [bookingMessage, setBookingMessage] = useState("");
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [refunds, setRefunds] = useState([]);
+  const [refundRequests, setRefundRequests] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [feedbackEntries, setFeedbackEntries] = useState([]);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
+  const [feedbackForm, setFeedbackForm] = useState({ rating: 5, feedback: "" });
+  const [networkingList, setNetworkingList] = useState([]);
+  const [profileForm, setProfileForm] = useState({ linkedinUrl: "", networkingOptIn: false });
+  const [googleReady, setGoogleReady] = useState(false);
+  const detailsRef = useRef(null);
+  const browseRef = useRef(null);
+  const organiserRef = useRef(null);
+  const checkinRef = useRef(null);
+  const ticketsRef = useRef(null);
+  const authRef = useRef(null);
+  const googleButtonRef = useRef(null);
+  const authRoleRef = useRef(authForm.role);
+
+  const userRoles = user?.roles?.length ? user.roles : user?.role ? [user.role] : [];
+  const isOrganiser = userRoles.includes("organiser") || userRoles.includes("admin");
+
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      const eventText = `${event.title} ${event.category} ${event.location}`.toLowerCase();
+      const lowestPrice = Math.min(...event.ticketTypes.map((ticket) => Number(ticket.price || 0)));
+      const eventDate = new Date(event.date);
+      const today = new Date();
+      const nextWeek = new Date();
+      nextWeek.setDate(today.getDate() + 7);
+      const nextMonth = new Date();
+      nextMonth.setMonth(today.getMonth() + 1);
+
+      const matchesSearch = !search.trim() || eventText.includes(search.toLowerCase());
+      const matchesCategory = categoryFilter === "all" || event.category === categoryFilter;
+      const matchesPrice = priceFilter === "all" || (priceFilter === "free" ? lowestPrice === 0 : lowestPrice > 0);
+      const matchesDate =
+        dateFilter === "all" ||
+        (dateFilter === "week" && eventDate <= nextWeek) ||
+        (dateFilter === "month" && eventDate <= nextMonth);
+
+      return matchesSearch && matchesCategory && matchesPrice && matchesDate;
+    });
+  }, [categoryFilter, dateFilter, events, priceFilter, search]);
+
+  const hasSelectedBooking = useMemo(() => {
+    if (!selectedEvent) return false;
+    return myTickets.some((ticket) => String(ticket.eventId?._id) === String(selectedEvent._id));
+  }, [myTickets, selectedEvent]);
+
+  const selectedEventEnded = useMemo(() => {
+    if (!selectedEvent?.date) return false;
+    return new Date(selectedEvent.date) < new Date();
+  }, [selectedEvent]);
+
+  const recommendedEvents = useMemo(() => {
+    if (!events.length) return [];
+
+    const scoreByCategory = new Map();
+    const addCategoryScore = (category, weight) => {
+      if (!category) return;
+      scoreByCategory.set(category, (scoreByCategory.get(category) || 0) + weight);
+    };
+
+    myTickets.forEach((ticket) => addCategoryScore(ticket.eventId?.category, 3));
+    wishlistedEvents.forEach((event) => addCategoryScore(event.category, 2));
+
+    return [...events]
+      .filter((event) => !wishlist.includes(event._id))
+      .map((event) => ({
+        event,
+        score: (scoreByCategory.get(event.category) || 0) + (new Date(event.date) > new Date() ? 1 : 0),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4)
+      .map((entry) => entry.event);
+  }, [events, myTickets, wishlistedEvents, wishlist]);
+
+  const refundsByBooking = useMemo(() => {
+    return refunds.reduce((acc, refund) => {
+      acc[refund.bookingId] = refund;
+      return acc;
+    }, {});
+  }, [refunds]);
+
+  const wishlistedEvents = useMemo(
+    () => events.filter((event) => wishlist.includes(event._id)),
+    [events, wishlist]
+  );
+
+  useEffect(() => {
+    localStorage.setItem("eventwithease-wishlist", JSON.stringify(wishlist));
+  }, [wishlist]);
+
+  useEffect(() => {
+    authRoleRef.current = authForm.role;
+  }, [authForm.role]);
+
+  useEffect(() => {
+    if (!user) return;
+    setProfileForm({
+      linkedinUrl: user.linkedinUrl || "",
+      networkingOptIn: Boolean(user.networkingOptIn),
+    });
+  }, [user]);
+
+  useEffect(() => {
+    hydrateSession();
+    handleAuthLink();
+  }, []);
+
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+    if (window.google) {
+      setGoogleReady(true);
+      return;
+    }
+    if (document.getElementById("google-identity-script")) return;
+
+    const script = document.createElement("script");
+    script.id = "google-identity-script";
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setGoogleReady(true);
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId || !googleReady || user || !googleButtonRef.current || !window.google || authMode === "forgot" || authMode === "reset") return;
+
+    googleButtonRef.current.innerHTML = "";
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCredential,
+    });
+    window.google.accounts.id.renderButton(googleButtonRef.current, {
+      theme: "outline",
+      size: "large",
+      text: authMode === "signup" ? "signup_with" : "signin_with",
+      width: googleButtonRef.current.offsetWidth || 260,
+    });
+  }, [authMode, user, googleReady, authForm.role]);
+
+  useEffect(() => {
+    const targetMap = {
+      organiser: organiserRef.current || authRef.current,
+      attendee: browseRef.current || detailsRef.current || ticketsRef.current,
+      checkin: checkinRef.current || organiserRef.current || authRef.current,
+    };
+
+    const target = targetMap[profileMode];
+    if (!target) return;
+
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [profileMode]);
+
+  function flash(message, isError = false) {
+    setStatusMessage("");
+    setErrorMessage("");
+    if (isError) setErrorMessage(message);
+    else setStatusMessage(message);
+    setTimeout(() => {
+      setStatusMessage("");
+      setErrorMessage("");
+    }, 5000);
+  }
+
+  async function hydrateSession() {
+    const token = localStorage.getItem("eventwithease-token");
+
+    try {
+      if (token) {
+        const response = await api.get("/auth/me");
+        setUser(response.data.user);
+        await Promise.all([loadMyTickets(), loadMyEvents(), loadRefunds()]);
+      }
+      await loadEvents();
+    } catch {
+      localStorage.removeItem("eventwithease-token");
+      await loadEvents();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadEvents() {
+    const response = await api.get("/events");
+    setEvents(response.data);
+  }
+
+
+  async function handleAuthLink() {
+    const params = new URLSearchParams(window.location.search);
+    const verifyToken = params.get("verifyToken");
+    const nextResetToken = params.get("resetToken");
+    const stripeSuccess = params.get("stripeSuccess");
+    const stripeCancel = params.get("stripeCancel");
+
+    if (stripeCancel) {
+      localStorage.removeItem("eventwithease-pending-payment");
+      flash("Stripe checkout cancelled.", true);
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+
+    if (stripeSuccess) {
+      const pending = localStorage.getItem("eventwithease-pending-payment");
+      if (pending) {
+        try {
+          const parsed = JSON.parse(pending);
+          await api.post("/bookings", {
+            eventId: parsed.eventId,
+            items: parsed.items,
+            discountCode: parsed.discountCode,
+          });
+          localStorage.removeItem("eventwithease-pending-payment");
+          await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds()]);
+          flash("Stripe payment confirmed. Tickets generated.");
+        } catch (error) {
+          flash(error.response?.data?.message || "Stripe payment confirmed but tickets could not be created.", true);
+        }
+      }
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+
+    if (nextResetToken) {
+      setResetToken(nextResetToken);
+      setAuthMode("reset");
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+
+    if (!verifyToken) return;
+
+    try {
+      const response = await api.post("/auth/verify-email", { token: verifyToken });
+      localStorage.setItem("eventwithease-token", response.data.token);
+      setUser(response.data.user);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds()]);
+      flash(response.data.message || "Email verified.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to verify email.", true);
+    } finally {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }
+  async function loadMyTickets() {
+    try {
+      const response = await api.get("/bookings/mine");
+      setMyTickets(response.data);
+    } catch {
+      setMyTickets([]);
+    }
+  }
+
+  async function loadMyEvents() {
+    try {
+      const response = await api.get("/events/my-events");
+      setMyEvents(response.data);
+    } catch {
+      setMyEvents([]);
+    }
+  }
+
+  async function loadRefunds() {
+    try {
+      const response = await api.get("/refunds/mine");
+      setRefunds(response.data);
+    } catch {
+      setRefunds([]);
+    }
+  }
+
+  async function loadReviews(eventId) {
+    try {
+      const response = await api.get(`/reviews/event/${eventId}`);
+      setReviews(response.data);
+    } catch {
+      setReviews([]);
+    }
+  }
+
+  async function loadNetworking(eventId) {
+    if (!user) return;
+    try {
+      const response = await api.get(`/events/${eventId}/networking`);
+      setNetworkingList(response.data);
+    } catch {
+      setNetworkingList([]);
+    }
+  }
+
+  const updateAuthField = (key, value) => setAuthForm((current) => ({ ...current, [key]: value }));
+  const updateEventField = (key, value) => setEventForm((current) => ({ ...current, [key]: value }));
+
+  const updateTicketType = (index, key, value) =>
+    setEventForm((current) => ({
+      ...current,
+      ticketTypes: current.ticketTypes.map((ticket, ticketIndex) =>
+        ticketIndex === index ? { ...ticket, [key]: value } : ticket
+      ),
+    }));
+
+  const addTicketType = () =>
+    setEventForm((current) => ({
+      ...current,
+      ticketTypes: [...current.ticketTypes, { name: "", price: "0", quantity: "10", earlyBirdPrice: "", earlyBirdEndsAt: "" }],
+    }));
+
+  const removeTicketType = (index) =>
+    setEventForm((current) => ({
+      ...current,
+      ticketTypes: current.ticketTypes.filter((_, ticketIndex) => ticketIndex !== index),
+    }));
+
+  const updateDiscountCode = (index, key, value) =>
+    setEventForm((current) => ({
+      ...current,
+      discountCodes: current.discountCodes.map((code, codeIndex) =>
+        codeIndex == index ? { ...code, [key]: value } : code
+      ),
+    }));
+
+  const addDiscountCode = () =>
+    setEventForm((current) => ({
+      ...current,
+      discountCodes: [...current.discountCodes, { code: "", type: "percent", value: "10", expiresAt: "" }],
+    }));
+
+  const removeDiscountCode = (index) =>
+    setEventForm((current) => ({
+      ...current,
+      discountCodes: current.discountCodes.filter((_, codeIndex) => codeIndex !== index),
+    }));
+
+  const updateFaq = (index, key, value) =>
+    setEventForm((current) => ({
+      ...current,
+      faq: current.faq.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item
+      ),
+    }));
+
+  const addFaq = () =>
+    setEventForm((current) => ({
+      ...current,
+      faq: [...current.faq, { question: "", answer: "" }],
+    }));
+
+  const removeFaq = (index) =>
+    setEventForm((current) => ({
+      ...current,
+      faq: current.faq.filter((_, itemIndex) => itemIndex !== index),
+    }));
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault();
+    try {
+      if (authMode === "forgot") {
+        const response = await api.post("/auth/forgot-password", { email: authForm.email });
+        flash(response.data.message || "Password reset email sent.");
+        return;
+      }
+
+      if (authMode === "reset") {
+        const response = await api.post("/auth/reset-password", { token: resetToken, password: authForm.password });
+        setAuthForm(emptyAuthForm);
+        setResetToken("");
+        setAuthMode("login");
+        flash(response.data.message || "Password updated. Login now.");
+        return;
+      }
+
+      const endpoint = authMode === "login" ? "/auth/login" : "/auth/signup";
+      const payload = authMode === "login" ? { email: authForm.email, password: authForm.password } : authForm;
+      const response = await api.post(endpoint, payload);
+
+      if (!response.data.token) {
+        setAuthMode("login");
+        flash(response.data.message || "Check your email to continue.");
+        return;
+      }
+
+      localStorage.setItem("eventwithease-token", response.data.token);
+      setUser(response.data.user);
+      setAuthForm(emptyAuthForm);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents()]);
+      flash(authMode === "login" ? "Welcome back." : "Account created.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Authentication failed.", true);
+    }
+  }
+
+  async function handleGoogleCredential(response) {
+    try {
+      const googleResponse = await api.post("/auth/google", {
+        credential: response.credential,
+        role: authRoleRef.current,
+        intent: authMode,
+      });
+      localStorage.setItem("eventwithease-token", googleResponse.data.token);
+      setUser(googleResponse.data.user);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents()]);
+      flash("Signed in with Google.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Google sign-in failed.", true);
+    }
+  }
+
+  async function resendVerification() {
+    try {
+      const response = await api.post("/auth/resend-verification", { email: authForm.email });
+      flash(response.data.message || "Verification email sent.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to resend verification.", true);
+    }
+  }
+
+  async function handleSelectEvent(id) {
+    try {
+      const response = await api.get(`/events/${id}`);
+      setSelectedEvent(response.data);
+      setSelectedTicketTypeId(response.data.ticketTypes[0]?._id || "");
+      setTicketCart(Object.fromEntries(response.data.ticketTypes.map((ticket, index) => [ticket._id, index === 0 ? 1 : 0])));
+      setReviewForm({ rating: 5, comment: "" });
+      setFeedbackForm({ rating: 5, feedback: "" });
+      await Promise.all([loadReviews(id), loadNetworking(id)]);
+      flash(`Loaded ${response.data.title}. Choose your ticket below.`);
+      requestAnimationFrame(() => {
+        detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to load event.", true);
+    }
+  }
+
+  async function handleCreateEvent(event) {
+    event.preventDefault();
+    try {
+      await api.post("/events", eventForm);
+      setEventForm(emptyEventForm);
+      await Promise.all([loadEvents(), loadMyEvents()]);
+      flash("Event created and published.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to create event.", true);
+    }
+  }
+
+
+  function updateTicketCart(ticketTypeId, quantity) {
+    setTicketCart((current) => ({
+      ...current,
+      [ticketTypeId]: Math.max(0, Number(quantity) || 0),
+    }));
+  }
+
+  function checkoutItems() {
+    return Object.entries(ticketCart)
+      .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity: Number(quantity) }))
+      .filter((item) => item.quantity > 0);
+  }
+
+  function getTicketEffectivePrice(ticket) {
+    if (!ticket) return 0;
+    const basePrice = Number(ticket.price) || 0;
+    const rawEarlyBird = ticket.earlyBirdPrice;
+    const hasEarlyBirdPrice = rawEarlyBird !== undefined && rawEarlyBird !== null && `${rawEarlyBird}`.trim() !== "";
+    const earlyBirdPrice = Number(rawEarlyBird);
+    const earlyBirdEndsAt = ticket.earlyBirdEndsAt ? new Date(ticket.earlyBirdEndsAt) : null;
+    const isEarlyBirdActive = hasEarlyBirdPrice && earlyBirdEndsAt && earlyBirdEndsAt > new Date();
+
+    if (isEarlyBirdActive && Number.isFinite(earlyBirdPrice)) {
+      return Math.max(0, earlyBirdPrice);
+    }
+
+    return basePrice;
+  }
+
+  function checkoutSubtotal() {
+    if (!selectedEvent) return 0;
+    return checkoutItems().reduce((sum, item) => {
+      const ticket = selectedEvent.ticketTypes.find((ticketType) => ticketType._id === item.ticketTypeId);
+      return sum + getTicketEffectivePrice(ticket) * item.quantity;
+    }, 0);
+  }
+
+  function getActiveDiscount() {
+    if (!selectedEvent || !discountCode.trim()) return null;
+    const normalizedCode = discountCode.trim().toUpperCase();
+    return selectedEvent.discountCodes?.find((code) => {
+      if (!code?.code) return false;
+      const isMatch = code.code.toUpperCase() === normalizedCode;
+      const expiresAt = code.expiresAt ? new Date(code.expiresAt) : null;
+      const isActive = !expiresAt || expiresAt > new Date();
+      return isMatch && isActive;
+    }) || null;
+  }
+
+  function checkoutDiscountAmount(subtotal) {
+    const discount = getActiveDiscount();
+    if (!discount) return 0;
+    const value = Number(discount.value) || 0;
+    if (discount.type === "percent") {
+      return Math.max(0, Math.min(subtotal, (subtotal * value) / 100));
+    }
+    return Math.max(0, Math.min(subtotal, value));
+  }
+
+  function checkoutTotal() {
+    const subtotal = checkoutSubtotal();
+    const discountAmount = checkoutDiscountAmount(subtotal);
+    return Math.max(0, subtotal - discountAmount);
+  }
+  async function handleStripeCheckout() {
+    setPaymentMessage("");
+    const items = checkoutItems();
+    if (!selectedEvent || !items.length) {
+      setPaymentMessage("Select at least one ticket quantity first.");
+      return;
+    }
+    if (!user) {
+      setPaymentMessage("Login before paying.");
+      authRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        "eventwithease-pending-payment",
+        JSON.stringify({ eventId: selectedEvent._id, items, discountCode })
+      );
+      const response = await api.post("/payments/stripe/checkout", {
+        eventId: selectedEvent._id,
+        items,
+        discountCode: discountCode.trim() || undefined,
+      });
+
+      if (response.data.mode === "stripe" && response.data.checkoutUrl) {
+        window.location.href = response.data.checkoutUrl;
+        return;
+      }
+
+      setPaymentMessage(response.data.message || "Stripe sandbox simulated.");
+      await handleBookTickets(new Event("submit"));
+    } catch (error) {
+      setPaymentMessage(error.response?.data?.message || "Unable to start Stripe checkout.");
+    }
+  }
+
+  async function handleRazorpayCheckout() {
+    setPaymentMessage("");
+    const items = checkoutItems();
+    if (!selectedEvent || !items.length) {
+      setPaymentMessage("Select at least one ticket quantity first.");
+      return;
+    }
+    if (!user) {
+      setPaymentMessage("Login before paying.");
+      authRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    try {
+      const response = await api.post("/payments/razorpay/order", {
+        eventId: selectedEvent._id,
+        items,
+        discountCode: discountCode.trim() || undefined,
+      });
+      setPaymentMessage(response.data.message || "Razorpay sandbox simulated.");
+      await handleBookTickets(new Event("submit"));
+    } catch (error) {
+      setPaymentMessage(error.response?.data?.message || "Unable to start Razorpay checkout.");
+    }
+  }
+
+  async function handleBookTickets(event) {
+    event.preventDefault();
+    setBookingMessage("");
+    const items = checkoutItems();
+
+    if (profileMode !== "attendee") {
+      setBookingMessage("Switch to Attendee mode to book tickets.");
+      return;
+    }
+
+    if (!selectedEvent || !items.length) {
+      setBookingMessage("Select at least one ticket quantity first.");
+      return;
+    }
+
+    if (!user) {
+      const message = "Login or use Google sign-in before booking.";
+      setBookingMessage(message);
+      flash(message, true);
+      authRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    try {
+      const trimmedCode = discountCode.trim();
+      const response = await api.post("/bookings", {
+        eventId: selectedEvent._id,
+        items,
+        discountCode: trimmedCode || undefined,
+      });
+      await Promise.all([loadEvents(), loadMyTickets()]);
+      setTicketCart(Object.fromEntries(selectedEvent.ticketTypes.map((ticket) => [ticket._id, 0])));
+      setDiscountCode("");
+      setBookingMessage(`${response.data.tickets.length} QR ticket(s) generated. Check Your QR tickets below.`);
+      flash("Booking confirmed. Your QR ticket is ready below.");
+      requestAnimationFrame(() => {
+        ticketsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } catch (error) {
+      const message = error.response?.data?.message || "Unable to complete booking.";
+      setBookingMessage(message);
+      flash(message, true);
+    }
+  }
+
+  function downloadTicketQr(ticketId, ticketCode) {
+    const svgElement = document.getElementById(`qr-${ticketId}`);
+    if (!svgElement) return;
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgElement);
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+    const image = new Image();
+
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0);
+      URL.revokeObjectURL(url);
+
+      const pngUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = pngUrl;
+      link.download = `EventwithEase-${ticketCode}.png`;
+      link.click();
+    };
+
+    image.src = url;
+  }
+
+  async function requestRefund(bookingId) {
+    try {
+      const response = await api.post("/refunds", { bookingId, reason: "Requested by attendee." });
+      setRefunds((current) => [response.data.refund, ...current]);
+      flash("Refund request submitted.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to request refund.", true);
+    }
+  }
+
+  async function resolveRefund(refundId, status) {
+    try {
+      const response = await api.post(`/refunds/${refundId}/resolve`, { status });
+      setRefundRequests((current) => current.map((item) => (item._id === refundId ? response.data.refund : item)));
+      flash(`Refund ${status}.`);
+      if (dashboard?.event?._id) await openDashboard(dashboard.event._id);
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to resolve refund.", true);
+    }
+  }
+
+  async function submitReview() {
+    if (!selectedEvent) return;
+    try {
+      const response = await api.post("/reviews", {
+        eventId: selectedEvent._id,
+        rating: reviewForm.rating,
+        comment: reviewForm.comment,
+      });
+      setReviews((current) => [response.data, ...current.filter((item) => item._id !== response.data._id)]);
+      flash("Review submitted.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to submit review.", true);
+    }
+  }
+
+  async function submitFeedback() {
+    if (!selectedEvent) return;
+    try {
+      await api.post("/feedback", {
+        eventId: selectedEvent._id,
+        rating: feedbackForm.rating,
+        feedback: feedbackForm.feedback,
+      });
+      flash("Feedback submitted.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to submit feedback.", true);
+    }
+  }
+
+  async function saveProfile() {
+    try {
+      const response = await api.post("/auth/profile", profileForm);
+      setUser(response.data.user);
+      flash("Profile updated.");
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to update profile.", true);
+    }
+  }
+
+
+  async function openDashboard(id) {
+    try {
+      const response = await api.get(`/events/${id}/dashboard`);
+      setDashboard(response.data);
+      try {
+        const refundsResponse = await api.get(`/refunds/event/${id}`);
+        setRefundRequests(refundsResponse.data);
+      } catch {
+        setRefundRequests([]);
+      }
+      try {
+        const feedbackResponse = await api.get(`/feedback/event/${id}`);
+        setFeedbackEntries(feedbackResponse.data);
+      } catch {
+        setFeedbackEntries([]);
+      }
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to load dashboard.", true);
+    }
+  }
+
+  async function handleCheckIn(event) {
+    event.preventDefault();
+    try {
+      const response = await api.post("/checkin", { ticketCode: checkInCode });
+      flash(`${response.data.ticket.userId.name} checked in successfully.`);
+      setCheckInCode("");
+      if (dashboard?.event?._id) await openDashboard(dashboard.event._id);
+    } catch (error) {
+      flash(error.response?.data?.message || "Unable to check in ticket.", true);
+    }
+  }
+
+
+  function toggleWishlist(eventId) {
+    setWishlist((current) =>
+      current.includes(eventId) ? current.filter((id) => id !== eventId) : [...current, eventId]
+    );
+  }
+
+  function generateEventAgenda(event) {
+    return event.agenda?.length
+      ? event.agenda
+      : ["Doors open and attendee check-in", `${event.category} keynote or opening act`, "Networking and closing notes"];
+  }
+
+  function generateEventSpeakers(event) {
+    return event.speakers?.length ? event.speakers : [event.organiserId?.name || "Event organiser", "Guest mentor"];
+  }
+
+  function addSession() {
+    setEventForm((current) => ({
+      ...current,
+      sessions: [...current.sessions, { title: "", speaker: "", duration: "30", preferredSlot: "Morning" }],
+    }));
+  }
+
+  function updateSession(index, key, value) {
+    setEventForm((current) => ({
+      ...current,
+      sessions: current.sessions.map((session, sessionIndex) =>
+        sessionIndex === index ? { ...session, [key]: value } : session
+      ),
+    }));
+  }
+
+  function removeSession(index) {
+    setEventForm((current) => ({
+      ...current,
+      sessions: current.sessions.filter((_, sessionIndex) => sessionIndex !== index),
+    }));
+  }
+
+  function formatTimeShort(value) {
+    return new Date(value).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function buildSmartSchedule() {
+    const sessions = eventForm.sessions.filter((session) => session.title.trim());
+    if (!sessions.length) {
+      flash("Add at least one session to build a schedule.", true);
+      return;
+    }
+
+    const slotOrder = { Morning: 0, Afternoon: 1, Evening: 2, Anytime: 3 };
+    const sorted = [...sessions].sort(
+      (a, b) => (slotOrder[a.preferredSlot] ?? 3) - (slotOrder[b.preferredSlot] ?? 3)
+    );
+
+    const start = eventForm.date ? new Date(eventForm.date) : new Date();
+    let cursor = new Date(start);
+
+    const agenda = sorted.map((session) => {
+      const duration = Number(session.duration) || 30;
+      const startTime = new Date(cursor);
+      const endTime = new Date(cursor.getTime() + duration * 60000);
+      cursor = endTime;
+
+      const label = `${formatTimeShort(startTime)} - ${formatTimeShort(endTime)} ? ${session.title}`;
+      return session.speaker ? `${label} (${session.speaker})` : label;
+    });
+
+    const speakers = sorted.map((session) => session.speaker).filter(Boolean);
+
+    setEventForm((current) => ({
+      ...current,
+      agenda,
+      speakers,
+    }));
+
+    flash("Smart schedule generated.");
+  }
+
+  function downloadDashboardCsv() {
+    if (!dashboard?.attendees?.length) {
+      flash("No attendees to export yet.", true);
+      return;
+    }
+
+    const rows = [
+      ["Name", "Email", "Ticket Code", "Status"],
+      ...dashboard.attendees.map((ticket) => [
+        ticket.userId?.name || "",
+        ticket.userId?.email || "",
+        ticket.ticketCode,
+        ticket.status,
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${dashboard.event.title.replace(/\s+/g, "-").toLowerCase()}-attendees.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function generateDescriptionDraft() {
+    const ticketNames = eventForm.ticketTypes.map((ticket) => ticket.name).filter(Boolean).join(", ") || "curated passes";
+    const title = eventForm.title || "this event";
+    const category = eventForm.category || "community";
+    const location = eventForm.location || "a memorable venue";
+
+    updateEventField(
+      "description",
+      `${title} brings together ${category.toLowerCase()} enthusiasts for a focused, high-energy experience at ${location}. Expect a smooth check-in flow, useful sessions, and ticket options including ${ticketNames}. Whether attendees are joining to learn, network, or celebrate, this event is designed to feel polished from booking to entry.`
+    );
+  }
+
+  function focusProfileMode(mode) {
+    setProfileMode(mode);
+
+    const targetMap = {
+      organiser: organiserRef.current || authRef.current,
+      attendee: browseRef.current || detailsRef.current || ticketsRef.current,
+      checkin: checkinRef.current || organiserRef.current || authRef.current,
+    };
+
+    requestAnimationFrame(() => {
+      targetMap[mode]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function panelClass(base, modes) {
+    return `${base}${modes.includes(profileMode) ? " panel-spotlight" : " panel-muted"}`;
+  }
+  function logout() {
+    localStorage.removeItem("eventwithease-token");
+    setUser(null);
+    setMyTickets([]);
+    setMyEvents([]);
+    setDashboard(null);
+    setSelectedEvent(null);
+    flash("Logged out.");
+  }
+
+  if (loading) {
+    return (
+      <div className="screen-center">
+        <div className="loading-wrap">
+          <LoadingSpinner />
+          <span className="loading-label">EventwithEase</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="hero-panel">
+        <div className="hero-copy-block">
+          <p className="eyebrow">EventwithEase</p>
+          <p className="hero-kicker">Event publishing - Ticketing - Check-in</p>
+          <h1>
+            <span>Make your next</span>
+            <span className="hero-accent">event feel bigger</span>
+            <span>before it even starts.</span>
+          </h1>
+          <p className="hero-copy">
+            Organisers launch events, sell ticket types, and track turnout live. Attendees browse, book, carry a QR
+            pass, and walk in with a single scan.
+          </p>
+          <div className="hero-strip">
+            {[
+              { mode: "organiser", label: "Organiser", sub: "Create events - Monitor revenue" },
+              { mode: "attendee", label: "Attendee", sub: "Book tickets - Carry QR entry" },
+              { mode: "checkin", label: "Check-in", sub: "Mark attendance in seconds" },
+            ].map(({ mode, label, sub }) => (
+              <button
+                type="button"
+                className={`hero-chip hero-chip-button${profileMode === mode ? " is-active" : ""}`}
+                key={label}
+                onClick={() => focusProfileMode(mode)}
+              >
+                <strong>{label}</strong>
+                <span>{sub}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="hero-stats">
+          {[
+            { value: events.length, label: "Live events" },
+            { value: myTickets.length, label: "Your tickets" },
+            { value: myEvents.length, label: "Managed events" },
+          ].map(({ value, label }) => (
+            <div className="hero-stat-card" key={label}>
+              <strong>
+                <AnimatedNumber value={value} />
+              </strong>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      </header>
+
+      {statusMessage && <div className="banner success">{statusMessage}</div>}
+      {errorMessage && <div className="banner error">{errorMessage}</div>}
+
+      <main className="grid-layout">
+        <section className={panelClass("panel auth-panel", ["organiser", "checkin"])} ref={authRef}>
+          <div className="section-head auth-head">
+            <h2>
+              {user
+                ? `Hello, ${user.name.split(" ")[0]}`
+                : authMode === "forgot"
+                  ? "Reset password"
+                  : authMode === "reset"
+                    ? "New password"
+                    : authMode === "signup"
+                      ? "Create account"
+                      : "Sign in"}
+            </h2>
+            {user ? (
+              <button className="ghost-button" onClick={logout}>
+                Logout
+              </button>
+            ) : authMode === "forgot" || authMode === "reset" ? (
+              <button className="ghost-button compact-button" type="button" onClick={() => setAuthMode("login")}>
+                Back
+              </button>
+            ) : (
+              <div className="switch-row">
+                <button className={`tab${authMode === "login" ? " active" : ""}`} type="button" onClick={() => setAuthMode("login")}>
+                  Login
+                </button>
+                <button className={`tab${authMode === "signup" ? " active" : ""}`} type="button" onClick={() => setAuthMode("signup")}>
+                  Signup
+                </button>
+              </div>
+            )}
+          </div>
+
+          {user ? (
+            <div className="user-card">
+              <p className="card-label">Signed in as</p>
+              <p className="user-email">{user.email}</p>
+              <span className="pill">{userRoles.join(" + ")}</span>
+              <div className="profile-switch">
+                <button
+                  className={`tab${profileMode === "attendee" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => focusProfileMode("attendee")}
+                >
+                  Attendee
+                </button>
+                <button
+                  className={`tab${profileMode === "organiser" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => focusProfileMode("organiser")}
+                >
+                  Organiser
+                </button>
+                <button
+                  className={`tab${profileMode === "checkin" ? " active" : ""}`}
+                  type="button"
+                  onClick={() => focusProfileMode("checkin")}
+                >
+                  Check-in
+                </button>
+              </div>
+              <div className="networking-card">
+                <p className="card-label">Networking profile</p>
+                <label className="networking-toggle">
+                  <input
+                    type="checkbox"
+                    checked={profileForm.networkingOptIn}
+                    onChange={(e) => setProfileForm((current) => ({ ...current, networkingOptIn: e.target.checked }))}
+                  />
+                  Share my LinkedIn with fellow attendees
+                </label>
+                <input
+                  placeholder="LinkedIn URL"
+                  value={profileForm.linkedinUrl}
+                  onChange={(e) => setProfileForm((current) => ({ ...current, linkedinUrl: e.target.value }))}
+                />
+                <button className="ghost-button" type="button" onClick={saveProfile}>
+                  Save profile
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form className="stack-form auth-form" onSubmit={handleAuthSubmit}>
+              {(authMode === "login" || authMode === "signup") && (
+                <>
+                  {authMode === "signup" && (
+                    <input
+                      placeholder="Full name"
+                      value={authForm.name}
+                      onChange={(e) => updateAuthField("name", e.target.value)}
+                    />
+                  )}
+                  <input
+                    type="email"
+                    placeholder="Email address"
+                    value={authForm.email}
+                    onChange={(e) => updateAuthField("email", e.target.value)}
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={authForm.password}
+                    onChange={(e) => updateAuthField("password", e.target.value)}
+                  />
+                  <div className="oauth-wrap">
+                    {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+                      <div ref={googleButtonRef} className="google-button-slot" />
+                    ) : (
+                      <button className="google-disabled" type="button" disabled>
+                        Google sign-in not configured
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {authMode === "forgot" && (
+                <input
+                  type="email"
+                  placeholder="Account email"
+                  value={authForm.email}
+                  onChange={(e) => updateAuthField("email", e.target.value)}
+                />
+              )}
+
+              {authMode === "reset" && (
+                <input
+                  type="password"
+                  placeholder="New password"
+                  value={authForm.password}
+                  onChange={(e) => updateAuthField("password", e.target.value)}
+                />
+              )}
+
+              <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
+                {authMode === "login"
+                  ? "Login"
+                  : authMode === "signup"
+                    ? "Create account"
+                    : authMode === "forgot"
+                      ? "Send reset mail"
+                      : "Update password"}
+              </PrimaryButton>
+
+              {authMode === "login" && (
+                <div className="auth-links">
+                  <button type="button" onClick={() => setAuthMode("forgot")}>
+                    Forgot password?
+                  </button>
+                  <button type="button" onClick={resendVerification}>
+                    Resend verify email
+                  </button>
+                </div>
+              )}
+
+              {authMode === "signup" && <p className="auth-note">We will email a verification link before login is enabled.</p>}
+              {authMode === "forgot" && <p className="auth-note">Enter your account email and we will send a reset link.</p>}
+              {authMode === "reset" && <p className="auth-note">Set a fresh password from the secure reset link.</p>}
+            </form>
+          )}
+        </section>
+
+        {profileMode === "attendee" && recommendedEvents.length > 0 && (
+        <section className={panelClass("panel span-two", ["attendee"])}>
+          <div className="section-head">
+            <h2>Recommended for you</h2>
+            <p className="section-note">Based on your past tickets and saved events.</p>
+          </div>
+          <div className="card-grid">
+            {recommendedEvents.map((event, index) => (
+              <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.07}s` }}>
+                <div
+                  className="event-cover"
+                  style={{
+                    backgroundImage: event.coverImage
+                      ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
+                      : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                  }}
+                >
+                  <span className="pill">{event.category}</span>
+                </div>
+                <div className="event-content">
+                  <p className="card-label">Recommended</p>
+                  <h3>{event.title}</h3>
+                  <p>{event.description}</p>
+                  <div className="meta-list">
+                    <span>{formatDate(event.date)}</span>
+                    <span>{event.location}</span>
+                  </div>
+                  <div className="event-actions">
+                    <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
+                    <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
+                      {wishlist.includes(event._id) ? "Saved" : "Wishlist"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+        )}
+
+{profileMode === "attendee" && (
+        <section className={panelClass("panel span-two", ["attendee"])} ref={browseRef}>
+          <div className="section-head event-browser-head">
+            <h2>Browse events</h2>
+            <div className="filter-bar">
+              <input
+                className="search-input"
+                placeholder="Search by name, city, category..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                <option value="all">All categories</option>
+                <option value="Tech">Tech</option>
+                <option value="Music">Music</option>
+                <option value="Business">Business</option>
+                <option value="Workshop">Workshop</option>
+                <option value="Sports">Sports</option>
+                <option value="Art">Art</option>
+                <option value="Community">Community</option>
+              </select>
+              <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
+                <option value="all">Any date</option>
+                <option value="week">Next 7 days</option>
+                <option value="month">Next month</option>
+              </select>
+              <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)}>
+                <option value="all">Any price</option>
+                <option value="free">Free</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
+          </div>
+
+          {filteredEvents.length === 0 ? (
+            <EmptyState label="No events found" />
+          ) : (
+            <div className="card-grid">
+              {filteredEvents.map((event, index) => (
+                <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.07}s` }}>
+                  <div
+                    className="event-cover"
+                    style={{
+                      backgroundImage: event.coverImage
+                        ? `linear-gradient(180deg,rgba(13,15,20,0.2),rgba(13,15,20,0.85)),url(${event.coverImage})`
+                        : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                    }}
+                  >
+                    <span className="pill">{event.category}</span>
+                  </div>
+                  <div className="event-content">
+                    <p className="card-label">Featured event</p>
+                    <h3>{event.title}</h3>
+                    <p>{event.description}</p>
+                    <div className="meta-list">
+                      <span>{formatDate(event.date)}</span>
+                      <span>{event.location}</span>
+                      <span>by {event.organiserId?.name || "Organiser"}</span>
+                    </div>
+                    <div className="event-actions">
+                      <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
+                      <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
+                        {wishlist.includes(event._id) ? "Saved" : "Wishlist"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+        )}
+
+        {profileMode === "attendee" && (
+        <section className={panelClass("panel", ["attendee"])} ref={detailsRef}>
+          <div className="section-head">
+            <h2>Book tickets</h2>
+          </div>
+
+          {selectedEvent ? (
+            <div className="details-card">
+              <div
+                className="details-cover"
+                style={{
+                  backgroundImage: selectedEvent.coverImage
+                    ? `linear-gradient(180deg,rgba(13,15,20,0.12),rgba(13,15,20,0.82)),url(${selectedEvent.coverImage})`
+                    : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                }}
+              >
+                <span className="pill">{selectedEvent.category}</span>
+              </div>
+              <p className="card-label">Selected event</p>
+              <h3>{selectedEvent.title}</h3>
+              <p>{selectedEvent.description}</p>
+              <div className="meta-list">
+                <span>{formatDate(selectedEvent.date)}</span>
+                <span>{selectedEvent.location}</span>
+              </div>
+              <div className="details-grid">
+                <div className="detail-block">
+                  <h4>Agenda</h4>
+                  <ul>
+                    {generateEventAgenda(selectedEvent).map((item, index) => (
+                      <li key={`${selectedEvent._id}-agenda-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="detail-block">
+                  <h4>Speakers</h4>
+                  <ul>
+                    {generateEventSpeakers(selectedEvent).map((speaker, index) => (
+                      <li key={`${selectedEvent._id}-speaker-${index}`}>{speaker}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="detail-block">
+                  <h4>FAQ</h4>
+                  <ul>
+                    {(selectedEvent.faq?.length
+                      ? selectedEvent.faq.map((item) => `${item.question}: ${item.answer}`)
+                      : ["Refunds are available up to 24 hours before the event.", "Bring a valid ID at check-in."]
+                    ).map((item, index) => (
+                      <li key={`${selectedEvent._id}-faq-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="detail-block">
+                  <h4>Venue map</h4>
+                  {selectedEvent.venueMapUrl ? (
+                    <a className="map-link" href={selectedEvent.venueMapUrl} target="_blank" rel="noreferrer">
+                      Open map
+                    </a>
+                  ) : (
+                    <p className="auth-note">Venue map will be shared after booking.</p>
+                  )}
+                </div>
+              </div>
+              <div className="details-actions">
+                {hasSelectedBooking ? (
+                  <div className="detail-block">
+                    <h4>Attendee networking</h4>
+                    {networkingList.length ? (
+                      <ul>
+                        {networkingList.map((person) => (
+                          <li key={person._id}>
+                            {person.name} ? <a className="map-link" href={person.linkedinUrl} target="_blank" rel="noreferrer">LinkedIn</a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="auth-note">No networking profiles shared yet.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="detail-block">
+                    <h4>Attendee networking</h4>
+                    <p className="auth-note">Book a ticket to access networking links.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="detail-block">
+                <h4>Public reviews</h4>
+                {reviews.length ? (
+                  <ul>
+                    {reviews.map((review) => (
+                      <li key={review._id}>
+                        <strong>{review.attendeeId?.name || "Attendee"}</strong>: {review.rating}/5 ? {review.comment || "(no comment)"}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="auth-note">No reviews yet.</p>
+                )}
+              </div>
+
+              {hasSelectedBooking && selectedEventEnded && (
+                <div className="detail-block">
+                  <h4>Leave a review</h4>
+                  <div className="review-form">
+                    <select value={reviewForm.rating} onChange={(e) => setReviewForm((current) => ({ ...current, rating: Number(e.target.value) }))}>
+                      {[5,4,3,2,1].map((value) => (
+                        <option key={value} value={value}>{value} star{value > 1 ? "s" : ""}</option>
+                      ))}
+                    </select>
+                    <input
+                      placeholder="Share your experience"
+                      value={reviewForm.comment}
+                      onChange={(e) => setReviewForm((current) => ({ ...current, comment: e.target.value }))}
+                    />
+                    <button className="ghost-button" type="button" onClick={submitReview}>
+                      Submit review
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {hasSelectedBooking && selectedEventEnded && (
+                <div className="detail-block">
+                  <h4>Private feedback</h4>
+                  <div className="review-form">
+                    <select value={feedbackForm.rating} onChange={(e) => setFeedbackForm((current) => ({ ...current, rating: Number(e.target.value) }))}>
+                      {[5,4,3,2,1].map((value) => (
+                        <option key={value} value={value}>{value} star{value > 1 ? "s" : ""}</option>
+                      ))}
+                    </select>
+                    <input
+                      placeholder="Feedback for the organiser"
+                      value={feedbackForm.feedback}
+                      onChange={(e) => setFeedbackForm((current) => ({ ...current, feedback: e.target.value }))}
+                    />
+                    <button className="ghost-button" type="button" onClick={submitFeedback}>
+                      Submit feedback
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="ticket-type-list">
+                {selectedEvent.ticketTypes.map((ticket) => (
+                  <label key={ticket._id} className={`ticket-option${ticketCart[ticket._id] > 0 ? " active" : ""}`}>
+                    <span className="ticket-option-name">{ticket.name}</span>
+                    <strong>{formatCurrency(getTicketEffectivePrice(ticket))}</strong>
+                    {ticket.earlyBirdEndsAt && getTicketEffectivePrice(ticket) !== Number(ticket.price) && (
+                      <span className="early-bird-note">Early bird ends {formatDate(ticket.earlyBirdEndsAt)}</span>
+                    )}
+                    <input
+                      className="ticket-quantity-input"
+                      type="number"
+                      min="0"
+                      value={ticketCart[ticket._id] || 0}
+                      onChange={(e) => updateTicketCart(ticket._id, e.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="checkout-summary">
+                <span>Subtotal</span>
+                <strong>{formatCurrency(checkoutSubtotal())}</strong>
+              </div>
+              <div className="checkout-discount">
+                <input
+                  className="discount-input"
+                  placeholder="Discount code (optional)"
+                  value={discountCode}
+                  onChange={(e) => setDiscountCode(e.target.value)}
+                />
+                <div className="discount-total">
+                  <span>Discount</span>
+                  <strong>-{formatCurrency(checkoutDiscountAmount(checkoutSubtotal()))}</strong>
+                </div>
+              </div>
+              <div className="checkout-summary checkout-total">
+                <span>Total</span>
+                <strong>{formatCurrency(checkoutTotal())}</strong>
+              </div>
+              <div className="payment-buttons">
+                <PrimaryButton type="button" onClick={handleStripeCheckout}>
+                  Pay with Stripe (test)
+                </PrimaryButton>
+                <button className="ghost-button" type="button" onClick={handleRazorpayCheckout}>
+                  Pay with Razorpay (test)
+                </button>
+                <button className="ghost-button" type="button" onClick={handleBookTickets}>
+                  Simulate payment
+                </button>
+              </div>
+              {paymentMessage && <p className="booking-message">{paymentMessage}</p>}
+              {bookingMessage && <p className="booking-message">{bookingMessage}</p>}
+            </div>
+          ) : (
+            <EmptyState label="Select an event to book tickets" />
+          )}
+        </section>
+        )}
+
+        {user && profileMode === "organiser" && (
+          <section className={panelClass("panel span-two", ["organiser"])} ref={organiserRef}>
+            <div className="section-head">
+              <h2>Create event</h2>
+            </div>
+            <form className="stack-form" onSubmit={handleCreateEvent}>
+              <div className="two-column">
+                <input placeholder="Event title" value={eventForm.title} onChange={(e) => updateEventField("title", e.target.value)} />
+                <input type="datetime-local" value={eventForm.date} onChange={(e) => updateEventField("date", e.target.value)} />
+              </div>
+              <div className="two-column">
+                <input placeholder="Location" value={eventForm.location} onChange={(e) => updateEventField("location", e.target.value)} />
+                <select value={eventForm.category} onChange={(e) => updateEventField("category", e.target.value)}>
+                  <option value="Tech">Tech</option>
+                  <option value="Music">Music</option>
+                  <option value="Business">Business</option>
+                  <option value="Workshop">Workshop</option>
+                  <option value="Sports">Sports</option>
+                  <option value="Art">Art</option>
+                  <option value="Community">Community</option>
+                </select>
+              </div>
+              <input
+                placeholder="Cover image URL (optional)"
+                value={eventForm.coverImage}
+                onChange={(e) => updateEventField("coverImage", e.target.value)}
+              />
+              <input
+                placeholder="Venue map URL (optional)"
+                value={eventForm.venueMapUrl}
+                onChange={(e) => updateEventField("venueMapUrl", e.target.value)}
+              />
+              <button type="button" className="ghost-button" onClick={generateDescriptionDraft}>
+                Generate AI-style description
+              </button>
+
+              <textarea
+                rows="4"
+                placeholder="Describe the event..."
+                value={eventForm.description}
+                onChange={(e) => updateEventField("description", e.target.value)}
+              />
+              <div className="session-builder">
+                <div className="session-head">
+                  <div>
+                    <p className="card-label">Sessions (Smart schedule)</p>
+                    <p className="auth-note">Add sessions and generate an ordered agenda.</p>
+                  </div>
+                  <button type="button" className="ghost-button" onClick={buildSmartSchedule}>
+                    Generate schedule
+                  </button>
+                </div>
+                {eventForm.sessions.length ? (
+                  <div className="session-grid">
+                    {eventForm.sessions.map((session, index) => (
+                      <div key={index} className="session-row">
+                        <input
+                          placeholder="Session title"
+                          value={session.title}
+                          onChange={(e) => updateSession(index, "title", e.target.value)}
+                        />
+                        <input
+                          placeholder="Speaker"
+                          value={session.speaker}
+                          onChange={(e) => updateSession(index, "speaker", e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          min="15"
+                          placeholder="Minutes"
+                          value={session.duration}
+                          onChange={(e) => updateSession(index, "duration", e.target.value)}
+                        />
+                        <select value={session.preferredSlot} onChange={(e) => updateSession(index, "preferredSlot", e.target.value)}>
+                          <option value="Morning">Morning</option>
+                          <option value="Afternoon">Afternoon</option>
+                          <option value="Evening">Evening</option>
+                          <option value="Anytime">Anytime</option>
+                        </select>
+                        <button type="button" className="ghost-button" onClick={() => removeSession(index)}>
+                          X
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="auth-note">No sessions added yet.</p>
+                )}
+                <button type="button" className="ghost-button" onClick={addSession}>
+                  + Add session
+                </button>
+              </div>
+
+              <div className="discount-builder">
+                <p className="card-label">Discount codes</p>
+                {eventForm.discountCodes.length ? (
+                  <div className="discount-grid">
+                    {eventForm.discountCodes.map((code, index) => (
+                      <div key={index} className="discount-row">
+                        <input
+                          placeholder="CODE10"
+                          value={code.code}
+                          onChange={(e) => updateDiscountCode(index, "code", e.target.value.toUpperCase())}
+                        />
+                        <select value={code.type} onChange={(e) => updateDiscountCode(index, "type", e.target.value)}>
+                          <option value="percent">% off</option>
+                          <option value="amount">Flat off</option>
+                        </select>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Value"
+                          value={code.value}
+                          onChange={(e) => updateDiscountCode(index, "value", e.target.value)}
+                        />
+                        <input
+                          type="date"
+                          value={code.expiresAt}
+                          onChange={(e) => updateDiscountCode(index, "expiresAt", e.target.value)}
+                        />
+                        <button type="button" className="ghost-button" onClick={() => removeDiscountCode(index)}>
+                          X
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="auth-note">No discount codes yet.</p>
+                )}
+                <button type="button" className="ghost-button" onClick={addDiscountCode}>
+                  + Add discount code
+                </button>
+              </div>
+
+              <div className="two-column">
+                <textarea
+                  rows="3"
+                  placeholder="Agenda (one item per line)"
+                  value={eventForm.agenda.join("\n")}
+                  onChange={(e) => updateEventField("agenda", e.target.value.split("\n").filter(Boolean))}
+                />
+                <textarea
+                  rows="3"
+                  placeholder="Speakers (one per line)"
+                  value={eventForm.speakers.join("\n")}
+                  onChange={(e) => updateEventField("speakers", e.target.value.split("\n").filter(Boolean))}
+                />
+              </div>
+              <div className="faq-builder">
+                <p className="card-label">FAQ</p>
+                {eventForm.faq.length ? (
+                  <div className="faq-grid">
+                    {eventForm.faq.map((item, index) => (
+                      <div key={index} className="faq-row">
+                        <input
+                          placeholder="Question"
+                          value={item.question}
+                          onChange={(e) => updateFaq(index, "question", e.target.value)}
+                        />
+                        <input
+                          placeholder="Answer"
+                          value={item.answer}
+                          onChange={(e) => updateFaq(index, "answer", e.target.value)}
+                        />
+                        <button type="button" className="ghost-button" onClick={() => removeFaq(index)}>
+                          X
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="auth-note">No FAQ items yet.</p>
+                )}
+                <button type="button" className="ghost-button" onClick={addFaq}>
+                  + Add FAQ
+                </button>
+              </div>
+
+              <div className="ticket-builder">
+                {eventForm.ticketTypes.map((ticket, index) => (
+                  <div key={index} className="ticket-builder-row">
+                    <input placeholder="Ticket name" value={ticket.name} onChange={(e) => updateTicketType(index, "name", e.target.value)} />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Price INR"
+                      value={ticket.price}
+                      onChange={(e) => updateTicketType(index, "price", e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Early bird price"
+                      value={ticket.earlyBirdPrice}
+                      onChange={(e) => updateTicketType(index, "earlyBirdPrice", e.target.value)}
+                    />
+                    <input
+                      type="date"
+                      placeholder="Early bird ends"
+                      value={ticket.earlyBirdEndsAt}
+                      onChange={(e) => updateTicketType(index, "earlyBirdEndsAt", e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Qty"
+                      value={ticket.quantity}
+                      onChange={(e) => updateTicketType(index, "quantity", e.target.value)}
+                    />
+                    <button type="button" className="ghost-button" onClick={() => removeTicketType(index)}>
+                      X
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="ghost-button ticket-builder-add" onClick={addTicketType}>
+                  + Add ticket type
+                </button>
+              </div>
+              <PrimaryButton type="submit" style={{ justifySelf: "start", minWidth: "180px" }}>
+                Publish event
+              </PrimaryButton>
+            </form>
+          </section>
+        )}
+
+        {profileMode === "attendee" && (
+        <section className={panelClass("panel", ["attendee"])} ref={ticketsRef}>
+          <div className="section-head">
+            <h2>Your QR tickets</h2>
+          </div>
+          <div className="ticket-stack">
+            {myTickets.length ? (
+              myTickets.map((ticket, index) => (
+                <article className="ticket-card" key={ticket._id} style={{ animationDelay: `${index * 0.08}s` }}>
+                  <div>
+                    <p className="card-label">Ticket ready</p>
+                    <h3>{ticket.eventId?.title}</h3>
+                    <p>{ticket.ticketTypeName}</p>
+                    <div className="meta-list ticket-meta-list">
+                      <span className="ticket-code">{ticket.ticketCode}</span>
+                      <span className={`ticket-status ${ticket.status === "checked-in" ? "is-checked-in" : ""}`}>
+                        {ticket.status === "checked-in" ? "Checked in" : ticket.status}
+                      </span>
+                      {refundsByBooking[ticket.bookingId] && (
+                        <span className={`ticket-status ${refundsByBooking[ticket.bookingId].status === "approved" ? "is-checked-in" : ""}`}>
+                          Refund {refundsByBooking[ticket.bookingId].status}
+                        </span>
+                      )}
+                    </div>
+                    {!refundsByBooking[ticket.bookingId] && ticket.status !== "refunded" && (
+                      <button className="ghost-button" type="button" onClick={() => requestRefund(ticket.bookingId)}>
+                        Request refund
+                      </button>
+                    )}
+                  </div>
+                  <div className="ticket-actions">
+                    <QRCodeSVG id={`qr-${ticket._id}`} value={ticket.ticketCode} size={96} bgColor="#ffffff" fgColor="#0d0f14" />
+                    <button className="ghost-button" type="button" onClick={() => downloadTicketQr(ticket._id, ticket.ticketCode)}>
+                      Download QR
+                    </button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <EmptyState label="Your booked tickets will appear here" />
+            )}
+          </div>
+        </section>
+        )}
+
+        {profileMode === "attendee" && (
+        <section className={panelClass("panel", ["attendee"])}>
+          <div className="section-head">
+            <h2>Wishlist</h2>
+          </div>
+          <div className="stack-list">
+            {wishlistedEvents.length ? (
+              wishlistedEvents.map((event) => (
+                <button key={event._id} className="list-button" onClick={() => handleSelectEvent(event._id)}>
+                  <span>{event.title}</span>
+                  <small>Reminder set for {formatDate(event.date)}</small>
+                </button>
+              ))
+            ) : (
+              <EmptyState label="Save events to get reminder notes here" />
+            )}
+          </div>
+        </section>
+        )}
+        {user && (profileMode === "organiser" || profileMode === "checkin") && (
+          <>
+            <section className={panelClass("panel", ["organiser", "checkin"])}>
+              <div className="section-head">
+                <h2>Managed events</h2>
+              </div>
+              {myEvents.length ? (
+                <div className="stack-list">
+                  {myEvents.map((event) => (
+                    <button key={event._id} className="list-button" onClick={() => openDashboard(event._id)}>
+                      <span>{event.title}</span>
+                      <small>{formatDate(event.date)}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState label="No events yet - create one above" />
+              )}
+            </section>
+
+            <section className={panelClass("panel span-two", ["checkin", "organiser"])} ref={checkinRef}>
+              <div className="section-head">
+                <h2>Check-in dashboard</h2>
+                {dashboard && (
+                  <button className="ghost-button" type="button" onClick={downloadDashboardCsv}>
+                    Download CSV
+                  </button>
+                )}
+              </div>
+              <form className="inline-form dashboard-checkin-form" onSubmit={handleCheckIn}>
+                <input placeholder="Paste ticket code here..." value={checkInCode} onChange={(e) => setCheckInCode(e.target.value)} />
+                <PrimaryButton type="submit">Mark attended</PrimaryButton>
+              </form>
+
+              {dashboard ? (
+                <div className="dashboard">
+                  <div className="stats-grid">
+                    <div className="stat-card">
+                      <strong>
+                        <AnimatedNumber value={dashboard.stats.registrations} />
+                      </strong>
+                      <span>Registrations</span>
+                    </div>
+                    <div className="stat-card">
+                      <strong className="stat-card-revenue">{formatCurrency(dashboard.stats.revenue)}</strong>
+                      <span>Revenue</span>
+                    </div>
+                    <div className="stat-card">
+                      <strong>
+                        <AnimatedNumber value={dashboard.stats.checkedInCount} />
+                      </strong>
+                      <span>Checked in</span>
+                    </div>
+                    <div className="stat-card">
+                      <strong className="stat-card-revenue">{formatCurrency(dashboard.stats.refundedAmount || 0)}</strong>
+                      <span>Refunded</span>
+                    </div>
+                    <div className="stat-card">
+                      <strong className="stat-card-revenue">{formatCurrency(dashboard.stats.payoutEstimate || 0)}</strong>
+                      <span>Payout</span>
+                    </div>
+                  </div>
+                  <div className="attendee-table">
+                    {dashboard.attendees.map((ticket, index) => (
+                      <div key={ticket._id} className="attendee-row" style={{ animationDelay: `${index * 0.04}s` }}>
+                        <span className="attendee-name">{ticket.userId?.name}</span>
+                        <span className="attendee-email">{ticket.userId?.email}</span>
+                        <span className="attendee-link">{ticket.userId?.networkingOptIn && ticket.userId?.linkedinUrl ? "LinkedIn shared" : "-"}</span>
+                        <span className="ticket-code">{ticket.ticketCode}</span>
+                        <span className={`attendee-status ${ticket.status === "checked-in" ? "is-checked-in" : ""}`}>
+                          {ticket.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <EmptyState label="Select one of your managed events to see live stats" />
+              )}
+            <section className={panelClass("panel", ["organiser", "checkin"])}>
+              <div className="section-head">
+                <h2>Refund requests</h2>
+              </div>
+              {refundRequests.length ? (
+                <div className="stack-list">
+                  {refundRequests.map((refund) => (
+                    <div key={refund._id} className="refund-row">
+                      <div>
+                        <strong>{refund.attendeeId?.name || "Attendee"}</strong>
+                        <p className="auth-note">{refund.reason || "No reason shared"}</p>
+                      </div>
+                      <div className="refund-actions">
+                        <span className="pill">{refund.status}</span>
+                        {refund.status === "pending" && (
+                          <>
+                            <button className="ghost-button" type="button" onClick={() => resolveRefund(refund._id, "approved")}>
+                              Approve
+                            </button>
+                            <button className="ghost-button" type="button" onClick={() => resolveRefund(refund._id, "rejected")}>
+                              Reject
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState label="No refund requests yet" />
+              )}
+            </section>
+
+            <section className={panelClass("panel", ["organiser", "checkin"])}>
+              <div className="section-head">
+                <h2>Post-event feedback</h2>
+              </div>
+              {feedbackEntries.length ? (
+                <div className="stack-list">
+                  {feedbackEntries.map((entry) => (
+                    <div key={entry._id} className="refund-row">
+                      <div>
+                        <strong>{entry.attendeeId?.name || "Attendee"}</strong>
+                        <p className="auth-note">{entry.feedback || "(no feedback text)"}</p>
+                      </div>
+                      <div className="refund-actions">
+                        <span className="pill">{entry.rating}/5</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState label="No feedback yet" />
+              )}
+            </section>
+
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
