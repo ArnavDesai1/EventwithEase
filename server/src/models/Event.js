@@ -34,6 +34,7 @@ const eventSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
     location: { type: String, required: true, trim: true },
+    venueType: { type: String, enum: ["physical", "online"], default: "physical" },
     category: { type: String, default: "General", trim: true },
     date: { type: Date, required: true },
     organiserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },

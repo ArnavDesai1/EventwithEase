@@ -75,7 +75,7 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", requireAuth, requireRole("organiser", "admin"), async (req, res) => {
   try {
-    const { title, description, location, category, date, coverImage, ticketTypes, discountCodes = [], agenda = [], speakers = [], faq = [], venueMapUrl = "" } = req.body;
+    const { title, description, location, category, date, coverImage, ticketTypes, discountCodes = [], agenda = [], speakers = [], faq = [], venueMapUrl = "", venueType = "physical" } = req.body;
 
     if (!title || !description || !location || !date || !Array.isArray(ticketTypes) || !ticketTypes.length) {
       return res.status(400).json({ message: "Missing required event fields." });

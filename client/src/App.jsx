@@ -7,6 +7,7 @@ const emptyEventForm = {
   title: "",
   description: "",
   location: "",
+  venueType: "physical",
   category: "Tech",
   date: "",
   coverImage: "",
@@ -1414,13 +1415,13 @@ export default function App() {
                   </ul>
                 </div>
                 <div className="detail-block">
-                  <h4>Venue map</h4>
+                  <h4>{selectedEvent.venueType === "online" ? "Online link" : "Venue map"}</h4>
                   {selectedEvent.venueMapUrl ? (
                     <a className="map-link" href={selectedEvent.venueMapUrl} target="_blank" rel="noreferrer">
-                      Open map
+                      {selectedEvent.venueType === "online" ? "Join link" : "Open map"}
                     </a>
                   ) : (
-                    <p className="auth-note">Venue map will be shared after booking.</p>
+                    <p className="auth-note">{selectedEvent.venueType === "online" ? "Online link will be shared after booking." : "Venue map will be shared after booking."}</p>
                   )}
                 </div>
               </div>
@@ -1450,6 +1451,9 @@ export default function App() {
 
               <div className="detail-block">
                 <h4>Public reviews</h4>
+                {reviews.length > 0 && (
+                  <p className="auth-note">Average rating: {Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10}/5</p>
+                )}
                 {reviews.length ? (
                   <ul>
                     {reviews.map((review) => (
@@ -1574,6 +1578,12 @@ export default function App() {
               </div>
               <div className="two-column">
                 <input placeholder="Location" value={eventForm.location} onChange={(e) => updateEventField("location", e.target.value)} />
+                <select value={eventForm.venueType} onChange={(e) => updateEventField("venueType", e.target.value)}>
+                  <option value="physical">Physical venue</option>
+                  <option value="online">Online event</option>
+                </select>
+              </div>
+              <div className="two-column">
                 <select value={eventForm.category} onChange={(e) => updateEventField("category", e.target.value)}>
                   <option value="Tech">Tech</option>
                   <option value="Music">Music</option>
