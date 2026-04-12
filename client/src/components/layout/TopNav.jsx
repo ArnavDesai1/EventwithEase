@@ -7,6 +7,7 @@ export default function TopNav({
   onGoDiscover,
   onGoBook,
   onGoTickets,
+  onGoWishlist,
   onGoOrganise,
   onGoCheckIn,
   onGoStats,
@@ -16,6 +17,7 @@ export default function TopNav({
   notificationUnread = 0,
   onNotificationsToggle,
   notificationsOpen = false,
+  navActiveKey = "discover",
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -70,33 +72,42 @@ export default function TopNav({
           <nav id="primary-site-nav" className="site-nav" aria-label="Workspace">
             <button
               type="button"
-              className={`site-nav-link${profileMode === "attendee" ? " is-active" : ""}`}
+              className={`site-nav-link${navActiveKey === "discover" ? " is-active" : ""}`}
               onClick={wrapNav(onGoDiscover)}
             >
               Discover
             </button>
-            <button type="button" className="site-nav-link" onClick={wrapNav(onGoBook)}>
+            <button type="button" className={`site-nav-link${navActiveKey === "book" ? " is-active" : ""}`} onClick={wrapNav(onGoBook)}>
               Book
             </button>
-            <button type="button" className="site-nav-link" onClick={wrapNav(onGoTickets)}>
+            <button type="button" className={`site-nav-link${navActiveKey === "tickets" ? " is-active" : ""}`} onClick={wrapNav(onGoTickets)}>
               My tickets
             </button>
+            {typeof onGoWishlist === "function" ? (
+              <button
+                type="button"
+                className={`site-nav-link${navActiveKey === "wishlist" ? " is-active" : ""}`}
+                onClick={wrapNav(onGoWishlist)}
+              >
+                Wishlist
+              </button>
+            ) : null}
             <button
               type="button"
-              className={`site-nav-link${profileMode === "organiser" ? " is-active" : ""}`}
+              className={`site-nav-link${navActiveKey === "organise" ? " is-active" : ""}`}
               onClick={wrapNav(onGoOrganise)}
             >
               Organise
             </button>
             <button
               type="button"
-              className={`site-nav-link${profileMode === "checkin" ? " is-active" : ""}`}
+              className={`site-nav-link${navActiveKey === "checkin" ? " is-active" : ""}`}
               onClick={wrapNav(onGoCheckIn)}
             >
               Check-in
             </button>
             {showStatsLink && typeof onGoStats === "function" ? (
-              <button type="button" className="site-nav-link" onClick={wrapNav(onGoStats)}>
+              <button type="button" className={`site-nav-link${navActiveKey === "stats" ? " is-active" : ""}`} onClick={wrapNav(onGoStats)}>
                 Stats
               </button>
             ) : null}

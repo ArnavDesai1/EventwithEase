@@ -3887,6 +3887,27 @@ body.nav-drawer-open {
   color: var(--ink-2);
 }
 
+.app-shell--subpage {
+  width: 100%;
+}
+
+.subpage-workspace {
+  padding-bottom: 32px;
+}
+
+.subpage-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.subpage-loading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+}
+
 .stats-page {
   padding: 24px 20px 48px;
   max-width: 1100px;

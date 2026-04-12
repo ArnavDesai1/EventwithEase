@@ -648,6 +648,33 @@ export default function App() {
     return match ? match[1] : null;
   }, [location.pathname]);
 
+  const ticketsPath = useMemo(() => /^\/tickets\/?$/.test(location.pathname), [location.pathname]);
+  const wishlistPath = useMemo(() => /^\/wishlist\/?$/.test(location.pathname), [location.pathname]);
+
+  const navActiveKey = useMemo(() => {
+    if (statsPath) return "stats";
+    if (eventIdInPath) return "book";
+    if (ticketsPath) return "tickets";
+    if (wishlistPath) return "wishlist";
+    if (profileMode === "organiser") return "organise";
+    if (profileMode === "checkin") return "checkin";
+    return "discover";
+  }, [statsPath, eventIdInPath, ticketsPath, wishlistPath, profileMode]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (eventIdInPath || hostIdInPath || statsPath || ticketsPath || wishlistPath) return;
+    const norm = (location.pathname || "/").replace(/\/$/, "") || "/";
+    if (norm === "/") {
+      lastOpenedEventIdRef.current = "";
+      setSelectedEvent(null);
+    }
+  }, [loading, location.pathname, eventIdInPath, hostIdInPath, statsPath, ticketsPath, wishlistPath]);
+
+  useEffect(() => {
+    if (eventIdInPath || ticketsPath || wishlistPath) setProfileMode("attendee");
+  }, [eventIdInPath, ticketsPath, wishlistPath]);
+
   useEffect(() => {
     const baseTitle = "EventwithEase — Events, tickets & check-in";
     const onEventPage =
@@ -1199,9 +1226,6 @@ export default function App() {
           ? `${data.title} is cancelled — new tickets are not on sale.`
           : `Loaded ${data.title}. Choose your ticket below.`
       );
-      requestAnimationFrame(() => {
-        detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
     } catch (error) {
       flash(error.response?.data?.message || "Unable to load event.", true);
       if (!updateUrl) {
@@ -1946,6 +1970,16 @@ export default function App() {
     navigate("/stats");
   }
 
+  function goWishlist() {
+    if (hostIdInPath) {
+      navigate("/wishlist");
+      setProfileMode("attendee");
+      return;
+    }
+    setProfileMode("attendee");
+    navigate("/wishlist");
+  }
+
   function getSelectedEventShareUrl() {
     if (!selectedEvent?._id) return "";
     return `${window.location.origin}/event/${selectedEvent._id}`;
@@ -2034,29 +2068,27 @@ export default function App() {
   }
 
   function goBook() {
+    setProfileMode("attendee");
     if (hostIdInPath) {
-      navigate("/", { state: { scrollTo: "ewe-discover" } });
-      setProfileMode("attendee");
+      navigate(selectedEvent?._id ? `/event/${selectedEvent._id}` : "/", { state: selectedEvent?._id ? undefined : { scrollTo: "ewe-discover" } });
       return;
     }
-    setProfileMode("attendee");
-    scrollToRef(detailsRef);
+    if (selectedEvent?._id) {
+      navigate(`/event/${selectedEvent._id}`);
+      return;
+    }
+    navigate("/", { state: { scrollTo: "ewe-discover" } });
   }
 
   function goTickets() {
-    if (hostIdInPath) {
-      if (!user) {
-        flash("Sign in to see My tickets.", true);
-        setHostAuthModalOpen(true);
-        setAuthMode("login");
-        return;
-      }
-      navigate("/", { state: { scrollTo: "ewe-tickets" } });
-      setProfileMode("attendee");
+    if (hostIdInPath && !user) {
+      flash("Sign in to see My tickets.", true);
+      setHostAuthModalOpen(true);
+      setAuthMode("login");
       return;
     }
     setProfileMode("attendee");
-    scrollToRef(ticketsRef);
+    navigate("/tickets");
   }
 
   function goOrganise() {
@@ -2314,6 +2346,7 @@ export default function App() {
           onGoDiscover={goDiscover}
           onGoBook={goBook}
           onGoTickets={goTickets}
+          onGoWishlist={goWishlist}
           onGoOrganise={goOrganise}
           onGoCheckIn={goCheckIn}
           onGoStats={goStats}
@@ -2323,6 +2356,7 @@ export default function App() {
           notificationUnread={user ? unreadCount : 0}
           onNotificationsToggle={() => setNotifOpen((o) => !o)}
           notificationsOpen={notifOpen}
+          navActiveKey={navActiveKey}
         />
         {user && nextBookedEventCountdown ? (
           <div className="countdown-strip" role="status">
@@ -2486,6 +2520,7 @@ export default function App() {
           onGoDiscover={goDiscover}
           onGoBook={goBook}
           onGoTickets={goTickets}
+          onGoWishlist={goWishlist}
           onGoOrganise={goOrganise}
           onGoCheckIn={goCheckIn}
           onGoStats={goStats}
@@ -2495,6 +2530,7 @@ export default function App() {
           notificationUnread={user ? unreadCount : 0}
           onNotificationsToggle={() => setNotifOpen((o) => !o)}
           notificationsOpen={notifOpen}
+          navActiveKey={navActiveKey}
         />
         {user && nextBookedEventCountdown ? (
           <div className="countdown-strip" role="status">
@@ -2749,6 +2785,560 @@ export default function App() {
     );
   }
 
+  
+  if (eventIdInPath || ticketsPath || wishlistPath) {
+    return (
+      <div className="app-root">
+        <a className="skip-link" href="#ewe-subpage">
+          Skip to content
+        </a>
+        <TopNav
+          user={user}
+          isOrganiser={isOrganiser}
+          profileMode={profileMode}
+          onGoDiscover={goDiscover}
+          onGoBook={goBook}
+          onGoTickets={goTickets}
+          onGoWishlist={goWishlist}
+          onGoOrganise={goOrganise}
+          onGoCheckIn={goCheckIn}
+          onGoStats={goStats}
+          showStatsLink={isAdminUser}
+          onOpenAccount={openAccount}
+          onLogout={logout}
+          notificationUnread={user ? unreadCount : 0}
+          onNotificationsToggle={() => setNotifOpen((o) => !o)}
+          notificationsOpen={notifOpen}
+          navActiveKey={navActiveKey}
+        />
+        {user && nextBookedEventCountdown ? (
+          <div className="countdown-strip" role="status">
+            <button
+              type="button"
+              className="countdown-strip__btn"
+              onClick={() => {
+                setNotifOpen(false);
+                handleSelectEvent(nextBookedEventCountdown.eid);
+              }}
+            >
+              <span className="countdown-strip__label">Next ticketed event</span>
+              <span className="countdown-strip__title">{nextBookedEventCountdown.title}</span>
+              <span className="countdown-strip__time">{formatMsAsCountdown(nextBookedEventCountdown.left)}</span>
+            </button>
+          </div>
+        ) : null}
+        <NotificationsPanel
+          open={notifOpen}
+          onClose={() => setNotifOpen(false)}
+          notifications={notifications}
+          markRead={markRead}
+          markAllRead={markAllRead}
+          navigate={navigate}
+          flash={flash}
+          desktopSupported={desktopSupported}
+          desktopPermission={desktopPermission}
+          requestDesktopPermission={requestDesktopPermission}
+          ticketPreview={ticketNotificationsPreview}
+          followingHosts={followingHosts}
+          formatMsAsCountdown={formatMsAsCountdown}
+          formatDate={formatDate}
+        />
+        <div className="app-flow">
+          <div className="app-shell app-shell--subpage">
+            {statusMessage && <div className="banner success">{statusMessage}</div>}
+            {errorMessage && <div className="banner error">{errorMessage}</div>}
+            <main id="ewe-subpage" className="grid-layout subpage-workspace">
+              {eventIdInPath ? (
+                <>
+                  <div className="subpage-toolbar span-two full-width">
+                    <button type="button" className="ghost-button compact-button" onClick={goDiscover}>
+                      ← Discover
+                    </button>
+                  </div>
+                  {String(selectedEvent?._id) !== String(eventIdInPath) ? (
+                    <div className="panel span-two full-width subpage-loading-row">
+                      <LoadingSpinner />
+                      <span className="auth-note">Loading event…</span>
+                    </div>
+                  ) : null}
+                  {String(selectedEvent?._id) === String(eventIdInPath) ? (
+                    <section id="ewe-book" className={panelClass("panel span-two full-width", ["attendee"])}>
+          <div className="section-head section-head--split section-head--wrap">
+            <h2>Book tickets</h2>
+            {selectedEvent ? (
+              <div className="share-actions-bar" role="group" aria-label="Share this event">
+                <button type="button" className="ghost-button compact-button" onClick={shareSelectedEventNative}>
+                  Share
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={copySelectedEventLink}>
+                  Copy link
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={copyOgPreviewLink}>
+                  Copy OG preview
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareWhatsApp}>
+                  WhatsApp
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareTelegram}>
+                  Telegram
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareTwitter}>
+                  X
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareLinkedIn}>
+                  LinkedIn
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareFacebook}>
+                  Facebook
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareInstagramHint}>
+                  Instagram
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareEmail}>
+                  Email
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {selectedEvent ? (
+            <div className="details-card">
+              <div
+                className="details-cover"
+                style={{
+                  backgroundImage: selectedEvent.coverImage
+                    ? `linear-gradient(180deg,rgba(13,15,20,0.12),rgba(13,15,20,0.82)),url(${selectedEvent.coverImage})`
+                    : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
+                }}
+              >
+                <span className="pill">{selectedEvent.category}</span>
+                {selectedEventCancelled ? <span className="pill pill--warn">Cancelled</span> : null}
+              </div>
+              <p className="card-label">Selected event</p>
+              <h3>{selectedEvent.title}</h3>
+              <p>{selectedEvent.description}</p>
+              {selectedEventCancelled ? (
+                <div className="cancel-banner" role="alert">
+                  <strong>Cancelled.</strong> New tickets are not on sale. If you already hold a ticket, check <em>My tickets</em> or
+                  request a refund where applicable.
+                </div>
+              ) : null}
+              <div className="meta-list">
+                <span>{formatDate(selectedEvent.date)}</span>
+                {selectedEvent.city ? <span>{selectedEvent.city}</span> : null}
+                <span>{selectedEvent.location}</span>
+              </div>
+              {eventOrganiserRefId(selectedEvent) ? (
+                <p className="auth-note host-line-detail">
+                  Host:{" "}
+                  <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(selectedEvent))}>
+                    {eventOrganiserDisplayName(selectedEvent) || "View profile"}
+                  </button>
+                  {" · "}
+                  Follow them for their lineup of events.
+                </p>
+              ) : null}
+              {eventOrganiserTagline(selectedEvent) ? (
+                <p className="auth-note host-tagline-detail">{eventOrganiserTagline(selectedEvent)}</p>
+              ) : null}
+              <div className="details-grid">
+                <div className="detail-block">
+                  <h4>Agenda</h4>
+                  <ul>
+                    {generateEventAgenda(selectedEvent).map((item, index) => (
+                      <li key={`${selectedEvent._id}-agenda-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="detail-block">
+                  <h4>Speakers</h4>
+                  <ul>
+                    {generateEventSpeakers(selectedEvent).map((speaker, index) => (
+                      <li key={`${selectedEvent._id}-speaker-${index}`}>{speaker}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="detail-block">
+                  <h4>FAQ</h4>
+                  <ul>
+                    {(selectedEvent.faq?.length
+                      ? selectedEvent.faq.map((item) => `${item.question}: ${item.answer}`)
+                      : ["Refunds are available up to 24 hours before the event.", "Bring a valid ID at check-in."]
+                    ).map((item, index) => (
+                      <li key={`${selectedEvent._id}-faq-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="detail-block">
+                  <h4>{selectedEvent.venueType === "online" ? "Online link" : "Venue map"}</h4>
+                  {selectedEvent.venueMapUrl ? (
+                    <a className="map-link" href={selectedEvent.venueMapUrl} target="_blank" rel="noreferrer">
+                      {selectedEvent.venueType === "online" ? "Join link" : "Open map"}
+                    </a>
+                  ) : (
+                    <p className="auth-note">{selectedEvent.venueType === "online" ? "Online link will be shared after booking." : "Venue map will be shared after booking."}</p>
+                  )}
+                </div>
+              </div>
+              <div className="details-actions">
+                {hasSelectedBooking ? (
+                  <div className="detail-block">
+                    <h4>Attendee networking</h4>
+                    {networkingList.length ? (
+                      <ul>
+                        {networkingList.map((person) => (
+                          <li key={person._id}>
+                            {person.name}{" "}
+                            <a className="map-link" href={person.linkedinUrl} target="_blank" rel="noreferrer">
+                              LinkedIn
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="auth-note">No networking profiles shared yet.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="detail-block">
+                    <h4>Attendee networking</h4>
+                    <p className="auth-note">Book a ticket to access networking links.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="detail-block review-block">
+                <div className="review-head">
+                  <h4>Public reviews</h4>
+                  {reviews.length > 0 ? (
+                    <div className="review-summary">
+                      <span className="review-average" title="Average star rating from all reviews">
+                        Avg.{" "}
+                        {(Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10).toFixed(1)}
+                        /5 stars
+                      </span>
+                      <span className="review-count">
+                        {reviews.length} {reviews.length === 1 ? "review" : "reviews"}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+                <p className="auth-note review-explainer">
+                  {hasSelectedBooking && selectedEventEnded
+                    ? "Below: public star review (everyone sees it) and private feedback (only the organiser sees it)."
+                    : hasSelectedBooking
+                      ? "When this event’s date has passed, you’ll be able to post a public review and private feedback on this same page."
+                      : "Book a ticket first. After the event, return here for a public review and optional private note to the organiser."}
+                </p>
+                {reviews.length ? (
+                  <div className="review-rail" role="region" aria-label={`${reviews.length} public reviews`}>
+                    {reviews.map((review) => (
+                      <div key={review._id} className="review-card">
+                        <div className="review-meta">
+                          <strong>{review.attendeeId?.name || "Attendee"}</strong>
+                          <span aria-label={`${review.rating} out of 5`}>
+                            {"★".repeat(review.rating)}
+                            {"☆".repeat(5 - review.rating)}
+                          </span>
+                        </div>
+                        <p>{review.comment || "(no comment)"}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="auth-note">No reviews yet.</p>
+                )}
+              </div>
+
+              {hasSelectedBooking && selectedEventEnded && (
+                <div className="detail-block">
+                  <h4>Leave a review</h4>
+                  <div className="review-form">
+                    <select value={reviewForm.rating} onChange={(e) => setReviewForm((current) => ({ ...current, rating: Number(e.target.value) }))}>
+                      {[5,4,3,2,1].map((value) => (
+                        <option key={value} value={value}>{value} star{value > 1 ? "s" : ""}</option>
+                      ))}
+                    </select>
+                    <input
+                      placeholder="Share your experience"
+                      value={reviewForm.comment}
+                      onChange={(e) => setReviewForm((current) => ({ ...current, comment: e.target.value }))}
+                    />
+                    <button className="ghost-button" type="button" onClick={submitReview}>
+                      Submit review
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {hasSelectedBooking && selectedEventEnded && (
+                <div className="detail-block">
+                  <h4>Private feedback</h4>
+                  <div className="review-form">
+                    <select value={feedbackForm.rating} onChange={(e) => setFeedbackForm((current) => ({ ...current, rating: Number(e.target.value) }))}>
+                      {[5,4,3,2,1].map((value) => (
+                        <option key={value} value={value}>{value} star{value > 1 ? "s" : ""}</option>
+                      ))}
+                    </select>
+                    <input
+                      placeholder="Feedback for the organiser"
+                      value={feedbackForm.feedback}
+                      onChange={(e) => setFeedbackForm((current) => ({ ...current, feedback: e.target.value }))}
+                    />
+                    <button className="ghost-button" type="button" onClick={submitFeedback}>
+                      Submit feedback
+                    </button>
+                  </div>
+                </div>
+              )}
+              {selectedEventCancelled ? (
+                <p className="booking-message">Ticketing is closed for this cancelled event.</p>
+              ) : (
+                <>
+                  <div className="ticket-type-list">
+                    {selectedEvent.ticketTypes.map((ticket) => (
+                      <label key={ticket._id} className={`ticket-option${ticketCart[ticket._id] > 0 ? " active" : ""}`}>
+                        <span className="ticket-option-name">{ticket.name}</span>
+                        <strong>{formatCurrency(getTicketEffectivePrice(ticket))}</strong>
+                        {ticket.earlyBirdEndsAt && getTicketEffectivePrice(ticket) !== Number(ticket.price) && (
+                          <span className="early-bird-note">Early bird ends {formatDate(ticket.earlyBirdEndsAt)}</span>
+                        )}
+                        <input
+                          className="ticket-quantity-input"
+                          type="number"
+                          min="0"
+                          inputMode="numeric"
+                          aria-label={`Quantity for ${ticket.name}`}
+                          value={ticketCart[ticket._id] || 0}
+                          onChange={(e) => updateTicketCart(ticket._id, e.target.value)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="checkout-summary">
+                    <span>Subtotal</span>
+                    <strong>{formatCurrency(checkoutSubtotal())}</strong>
+                  </div>
+                  <div className="checkout-discount">
+                    <input
+                      className="discount-input"
+                      placeholder="Discount code (optional)"
+                      value={discountCode}
+                      onChange={(e) => setDiscountCode(e.target.value)}
+                    />
+                    <div className="discount-total">
+                      <span>Discount</span>
+                      <strong>-{formatCurrency(checkoutDiscountAmount(checkoutSubtotal()))}</strong>
+                    </div>
+                  </div>
+                  <div className="checkout-summary checkout-total">
+                    <span>Total</span>
+                    <strong>{formatCurrency(checkoutTotal())}</strong>
+                  </div>
+                  <div className="payment-buttons">
+                    <PrimaryButton type="button" onClick={handleStripeCheckout}>
+                      Pay with Stripe (test)
+                    </PrimaryButton>
+                    <button className="ghost-button" type="button" onClick={handleRazorpayCheckout}>
+                      Pay with Razorpay (test)
+                    </button>
+                    <button className="ghost-button" type="button" onClick={handleBookTickets}>
+                      Simulate payment
+                    </button>
+                  </div>
+                  {paymentMessage && <p className="booking-message">{paymentMessage}</p>}
+                  {bookingMessage && <p className="booking-message">{bookingMessage}</p>}
+                  {lastBookingErrorCode === "SOLD_OUT" && user ? (
+                    <div className="waitlist-cta">
+                      <p className="auth-note">Sold out for that selection — join the waitlist and we will prioritize you if capacity changes.</p>
+                      <button type="button" className="ghost-button" onClick={joinEventWaitlistForSelection}>
+                        Join waitlist
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : (
+            <EmptyState label="Select an event to book tickets" />
+          )}
+        </section>
+                  ) : null}
+                </>
+              ) : null}
+              {ticketsPath ? (
+              <section id="ewe-tickets" className={panelClass("panel span-two full-width", ["attendee"])}>
+          <div className="section-head">
+            <h2>Your QR tickets</h2>
+            <p className="section-note">
+              Live countdown and cancel window show here once events are loaded. After entry, the host scans your QR once — your status
+              here becomes <strong>Checked in</strong> (refresh if needed). Same login can both host and hold tickets; use <strong>My tickets</strong>{" "}
+              as the attendee view and <strong>Check-in</strong> as the door view.
+            </p>
+          </div>
+          <div className="ticket-stack">
+            {myTickets.length ? (
+              myTickets.map((ticket, index) => {
+                const eid = String(ticket.eventId?._id || ticket.eventId || "");
+                const evMerged = (eid && events.find((e) => String(e._id) === eid)) || ticket.eventId;
+                const eventDateVal = evMerged?.date;
+                const isLeadTicket =
+                  myTickets.findIndex((t) => String(t.bookingId) === String(ticket.bookingId)) === index;
+                const eventNotStarted = eventDateVal && new Date(eventDateVal) > new Date();
+                const startMs = eventDateVal ? new Date(eventDateVal).getTime() : NaN;
+                const untilStart = Number.isFinite(startMs) ? Math.max(0, startMs - countdownNow) : null;
+                const bid = String(ticket.bookingId);
+                const minMsBeforeStart = CANCEL_DEADLINE_HOURS_BEFORE * 3600000;
+                const insideCancelWindow = untilStart != null && untilStart >= minMsBeforeStart;
+                const canCancelBooking =
+                  isLeadTicket &&
+                  eventNotStarted &&
+                  ticket.status === "booked" &&
+                  !refundsByBooking[bid] &&
+                  !evMerged?.cancelledAt &&
+                  insideCancelWindow;
+                const showCancelClosed =
+                  isLeadTicket &&
+                  eventNotStarted &&
+                  ticket.status === "booked" &&
+                  !refundsByBooking[bid] &&
+                  !evMerged?.cancelledAt &&
+                  !insideCancelWindow &&
+                  untilStart != null &&
+                  untilStart < minMsBeforeStart;
+
+                return (
+                <article className="ticket-card" key={ticket._id} style={{ animationDelay: `${index * 0.08}s` }}>
+                  <div>
+                    <p className="card-label">Ticket ready</p>
+                    <h3>{evMerged?.title || ticket.eventId?.title}</h3>
+                    <p>{ticket.ticketTypeName}</p>
+                    {eventNotStarted && untilStart != null ? (
+                      <p className="ticket-countdown-line" role="status">
+                        <strong>{formatMsAsCountdown(untilStart)}</strong> until doors · {formatDate(eventDateVal)}
+                      </p>
+                    ) : null}
+                    {canCancelBooking ? (
+                      <p className="auth-note ticket-cancel-hint">
+                        Cancellation: until <strong>{CANCEL_DEADLINE_HOURS_BEFORE}h</strong> before start. Within <strong>5h</strong> of
+                        booking = minimal fee; after that a higher fee applies. Paid refunds <strong>auto-approve ~24h</strong> after you
+                        cancel.
+                      </p>
+                    ) : null}
+                    {showCancelClosed ? (
+                      <p className="auth-note ticket-cancel-hint ticket-cancel-hint--warn">
+                        Cancellation is closed (inside {CANCEL_DEADLINE_HOURS_BEFORE}h of start).
+                      </p>
+                    ) : null}
+                    <div className="meta-list ticket-meta-list">
+                      <span className="ticket-code">{ticket.ticketCode}</span>
+                      <span
+                        className={`ticket-status ${
+                          ticket.status === "checked-in" ? "is-checked-in" : ticket.status === "expired" ? "is-expired" : ""
+                        }`}
+                      >
+                        {ticket.status === "checked-in" ? "Checked in" : ticket.status === "expired" ? "Expired" : ticket.status}
+                      </span>
+                      {refundsByBooking[bid] && (
+                        <span className={`ticket-status ${refundsByBooking[bid].status === "approved" ? "is-checked-in" : ""}`}>
+                          Refund {refundsByBooking[bid].status}
+                        </span>
+                      )}
+                    </div>
+                    {canCancelBooking && (
+                      <button className="ghost-button" type="button" onClick={() => cancelBooking(ticket.bookingId)}>
+                        Cancel booking
+                      </button>
+                    )}
+                    {eventDateVal && new Date(eventDateVal) < new Date() && (evMerged?._id || eid) ? (
+                      <div className="ticket-feedback-hint">
+                        <p className="auth-note">
+                          After the event: leave a <strong>public review</strong> and <strong>private feedback</strong> for the organiser on the
+                          event page (Book tickets → same event).
+                        </p>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => handleSelectEvent(evMerged?._id || eid)}
+                        >
+                          Open event — review & feedback
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="ticket-actions">
+                    <QRCodeSVG id={`qr-${ticket._id}`} value={ticket.ticketCode} size={96} bgColor="#ffffff" fgColor="#0d0f14" />
+                    <button className="ghost-button" type="button" onClick={() => downloadTicketQr(ticket._id, ticket.ticketCode)}>
+                      Download QR
+                    </button>
+                  </div>
+                </article>
+                );
+              })
+            ) : (
+              <EmptyState
+                label="Your booked tickets will appear here"
+                hint="After you attend an event, open it again from Browse to leave a public review and private organiser feedback."
+              />
+            )}
+          </div>
+        </section>
+              ) : null}
+              {wishlistPath ? (
+                <>
+                  {wishlistReminders.length > 0 && (
+          <section id="ewe-reminders" className={panelClass("panel full-width", ["attendee"])}>
+            <div className="section-head">
+              <h2>Upcoming reminders</h2>
+              <p className="section-note">Wishlisted events starting in the next 72 hours (in-app + email when SMTP is configured).</p>
+            </div>
+            <div className="stack-list">
+              {wishlistReminders.map((event) => (
+                <button key={event._id} className="list-button" type="button" onClick={() => handleSelectEvent(event._id)}>
+                  <span>{event.title}</span>
+                  <small>{formatDate(event.date)}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+                  <section id="ewe-wishlist" className={panelClass("panel span-two full-width", ["attendee"])}>
+          <div className="section-head">
+            <h2>Wishlist</h2>
+          </div>
+          <div className="stack-list">
+            {wishlistedEvents.length ? (
+              wishlistedEvents.map((event) => (
+                <div key={event._id} className="wishlist-item">
+                  <button className="list-button wishlist-main" type="button" onClick={() => handleSelectEvent(event._id)}>
+                    <span>{event.title}</span>
+                    <small>Reminder set for {formatDate(event.date)}</small>
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button compact-button"
+                    aria-label={`Remove ${event.title} from wishlist`}
+                    onClick={() => toggleWishlist(event._id)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))
+            ) : (
+              <EmptyState label="Save events to get reminder notes here" />
+            )}
+          </div>
+        </section>
+                </>
+              ) : null}
+            </main>
+          </div>
+        </div>
+        <SiteFooter />
+      </div>
+    );
+  }
+
   return (
     <div className="app-root">
       <a className="skip-link" href="#ewe-main">
@@ -2761,6 +3351,7 @@ export default function App() {
         onGoDiscover={goDiscover}
         onGoBook={goBook}
         onGoTickets={goTickets}
+        onGoWishlist={goWishlist}
         onGoOrganise={goOrganise}
         onGoCheckIn={goCheckIn}
         onGoStats={goStats}
@@ -2770,6 +3361,7 @@ export default function App() {
         notificationUnread={user ? unreadCount : 0}
         onNotificationsToggle={() => setNotifOpen((o) => !o)}
         notificationsOpen={notifOpen}
+        navActiveKey={navActiveKey}
       />
       {user && nextBookedEventCountdown ? (
         <div className="countdown-strip" role="status">
@@ -3297,310 +3889,6 @@ export default function App() {
         </section>
         )}
 
-        {profileMode === "attendee" && (
-        <section id="ewe-book" className={panelClass("panel", ["attendee"])} ref={detailsRef}>
-          <div className="section-head section-head--split section-head--wrap">
-            <h2>Book tickets</h2>
-            {selectedEvent ? (
-              <div className="share-actions-bar" role="group" aria-label="Share this event">
-                <button type="button" className="ghost-button compact-button" onClick={shareSelectedEventNative}>
-                  Share
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={copySelectedEventLink}>
-                  Copy link
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={copyOgPreviewLink}>
-                  Copy OG preview
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={shareWhatsApp}>
-                  WhatsApp
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={shareTelegram}>
-                  Telegram
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={shareTwitter}>
-                  X
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={shareLinkedIn}>
-                  LinkedIn
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={shareFacebook}>
-                  Facebook
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={shareInstagramHint}>
-                  Instagram
-                </button>
-                <button type="button" className="ghost-button compact-button" onClick={shareEmail}>
-                  Email
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          {selectedEvent ? (
-            <div className="details-card">
-              <div
-                className="details-cover"
-                style={{
-                  backgroundImage: selectedEvent.coverImage
-                    ? `linear-gradient(180deg,rgba(13,15,20,0.12),rgba(13,15,20,0.82)),url(${selectedEvent.coverImage})`
-                    : "linear-gradient(135deg,#0d4a46,#0a1a2e)",
-                }}
-              >
-                <span className="pill">{selectedEvent.category}</span>
-                {selectedEventCancelled ? <span className="pill pill--warn">Cancelled</span> : null}
-              </div>
-              <p className="card-label">Selected event</p>
-              <h3>{selectedEvent.title}</h3>
-              <p>{selectedEvent.description}</p>
-              {selectedEventCancelled ? (
-                <div className="cancel-banner" role="alert">
-                  <strong>Cancelled.</strong> New tickets are not on sale. If you already hold a ticket, check <em>My tickets</em> or
-                  request a refund where applicable.
-                </div>
-              ) : null}
-              <div className="meta-list">
-                <span>{formatDate(selectedEvent.date)}</span>
-                {selectedEvent.city ? <span>{selectedEvent.city}</span> : null}
-                <span>{selectedEvent.location}</span>
-              </div>
-              {eventOrganiserRefId(selectedEvent) ? (
-                <p className="auth-note host-line-detail">
-                  Host:{" "}
-                  <button type="button" className="link-like-button" onClick={() => goHostProfile(eventOrganiserRefId(selectedEvent))}>
-                    {eventOrganiserDisplayName(selectedEvent) || "View profile"}
-                  </button>
-                  {" · "}
-                  Follow them for their lineup of events.
-                </p>
-              ) : null}
-              {eventOrganiserTagline(selectedEvent) ? (
-                <p className="auth-note host-tagline-detail">{eventOrganiserTagline(selectedEvent)}</p>
-              ) : null}
-              <div className="details-grid">
-                <div className="detail-block">
-                  <h4>Agenda</h4>
-                  <ul>
-                    {generateEventAgenda(selectedEvent).map((item, index) => (
-                      <li key={`${selectedEvent._id}-agenda-${index}`}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="detail-block">
-                  <h4>Speakers</h4>
-                  <ul>
-                    {generateEventSpeakers(selectedEvent).map((speaker, index) => (
-                      <li key={`${selectedEvent._id}-speaker-${index}`}>{speaker}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="detail-block">
-                  <h4>FAQ</h4>
-                  <ul>
-                    {(selectedEvent.faq?.length
-                      ? selectedEvent.faq.map((item) => `${item.question}: ${item.answer}`)
-                      : ["Refunds are available up to 24 hours before the event.", "Bring a valid ID at check-in."]
-                    ).map((item, index) => (
-                      <li key={`${selectedEvent._id}-faq-${index}`}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="detail-block">
-                  <h4>{selectedEvent.venueType === "online" ? "Online link" : "Venue map"}</h4>
-                  {selectedEvent.venueMapUrl ? (
-                    <a className="map-link" href={selectedEvent.venueMapUrl} target="_blank" rel="noreferrer">
-                      {selectedEvent.venueType === "online" ? "Join link" : "Open map"}
-                    </a>
-                  ) : (
-                    <p className="auth-note">{selectedEvent.venueType === "online" ? "Online link will be shared after booking." : "Venue map will be shared after booking."}</p>
-                  )}
-                </div>
-              </div>
-              <div className="details-actions">
-                {hasSelectedBooking ? (
-                  <div className="detail-block">
-                    <h4>Attendee networking</h4>
-                    {networkingList.length ? (
-                      <ul>
-                        {networkingList.map((person) => (
-                          <li key={person._id}>
-                            {person.name}{" "}
-                            <a className="map-link" href={person.linkedinUrl} target="_blank" rel="noreferrer">
-                              LinkedIn
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="auth-note">No networking profiles shared yet.</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="detail-block">
-                    <h4>Attendee networking</h4>
-                    <p className="auth-note">Book a ticket to access networking links.</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="detail-block review-block">
-                <div className="review-head">
-                  <h4>Public reviews</h4>
-                  {reviews.length > 0 ? (
-                    <div className="review-summary">
-                      <span className="review-average" title="Average star rating from all reviews">
-                        Avg.{" "}
-                        {(Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10).toFixed(1)}
-                        /5 stars
-                      </span>
-                      <span className="review-count">
-                        {reviews.length} {reviews.length === 1 ? "review" : "reviews"}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-                <p className="auth-note review-explainer">
-                  {hasSelectedBooking && selectedEventEnded
-                    ? "Below: public star review (everyone sees it) and private feedback (only the organiser sees it)."
-                    : hasSelectedBooking
-                      ? "When this event’s date has passed, you’ll be able to post a public review and private feedback on this same page."
-                      : "Book a ticket first. After the event, return here for a public review and optional private note to the organiser."}
-                </p>
-                {reviews.length ? (
-                  <div className="review-rail" role="region" aria-label={`${reviews.length} public reviews`}>
-                    {reviews.map((review) => (
-                      <div key={review._id} className="review-card">
-                        <div className="review-meta">
-                          <strong>{review.attendeeId?.name || "Attendee"}</strong>
-                          <span aria-label={`${review.rating} out of 5`}>
-                            {"★".repeat(review.rating)}
-                            {"☆".repeat(5 - review.rating)}
-                          </span>
-                        </div>
-                        <p>{review.comment || "(no comment)"}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="auth-note">No reviews yet.</p>
-                )}
-              </div>
-
-              {hasSelectedBooking && selectedEventEnded && (
-                <div className="detail-block">
-                  <h4>Leave a review</h4>
-                  <div className="review-form">
-                    <select value={reviewForm.rating} onChange={(e) => setReviewForm((current) => ({ ...current, rating: Number(e.target.value) }))}>
-                      {[5,4,3,2,1].map((value) => (
-                        <option key={value} value={value}>{value} star{value > 1 ? "s" : ""}</option>
-                      ))}
-                    </select>
-                    <input
-                      placeholder="Share your experience"
-                      value={reviewForm.comment}
-                      onChange={(e) => setReviewForm((current) => ({ ...current, comment: e.target.value }))}
-                    />
-                    <button className="ghost-button" type="button" onClick={submitReview}>
-                      Submit review
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {hasSelectedBooking && selectedEventEnded && (
-                <div className="detail-block">
-                  <h4>Private feedback</h4>
-                  <div className="review-form">
-                    <select value={feedbackForm.rating} onChange={(e) => setFeedbackForm((current) => ({ ...current, rating: Number(e.target.value) }))}>
-                      {[5,4,3,2,1].map((value) => (
-                        <option key={value} value={value}>{value} star{value > 1 ? "s" : ""}</option>
-                      ))}
-                    </select>
-                    <input
-                      placeholder="Feedback for the organiser"
-                      value={feedbackForm.feedback}
-                      onChange={(e) => setFeedbackForm((current) => ({ ...current, feedback: e.target.value }))}
-                    />
-                    <button className="ghost-button" type="button" onClick={submitFeedback}>
-                      Submit feedback
-                    </button>
-                  </div>
-                </div>
-              )}
-              {selectedEventCancelled ? (
-                <p className="booking-message">Ticketing is closed for this cancelled event.</p>
-              ) : (
-                <>
-                  <div className="ticket-type-list">
-                    {selectedEvent.ticketTypes.map((ticket) => (
-                      <label key={ticket._id} className={`ticket-option${ticketCart[ticket._id] > 0 ? " active" : ""}`}>
-                        <span className="ticket-option-name">{ticket.name}</span>
-                        <strong>{formatCurrency(getTicketEffectivePrice(ticket))}</strong>
-                        {ticket.earlyBirdEndsAt && getTicketEffectivePrice(ticket) !== Number(ticket.price) && (
-                          <span className="early-bird-note">Early bird ends {formatDate(ticket.earlyBirdEndsAt)}</span>
-                        )}
-                        <input
-                          className="ticket-quantity-input"
-                          type="number"
-                          min="0"
-                          inputMode="numeric"
-                          aria-label={`Quantity for ${ticket.name}`}
-                          value={ticketCart[ticket._id] || 0}
-                          onChange={(e) => updateTicketCart(ticket._id, e.target.value)}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <div className="checkout-summary">
-                    <span>Subtotal</span>
-                    <strong>{formatCurrency(checkoutSubtotal())}</strong>
-                  </div>
-                  <div className="checkout-discount">
-                    <input
-                      className="discount-input"
-                      placeholder="Discount code (optional)"
-                      value={discountCode}
-                      onChange={(e) => setDiscountCode(e.target.value)}
-                    />
-                    <div className="discount-total">
-                      <span>Discount</span>
-                      <strong>-{formatCurrency(checkoutDiscountAmount(checkoutSubtotal()))}</strong>
-                    </div>
-                  </div>
-                  <div className="checkout-summary checkout-total">
-                    <span>Total</span>
-                    <strong>{formatCurrency(checkoutTotal())}</strong>
-                  </div>
-                  <div className="payment-buttons">
-                    <PrimaryButton type="button" onClick={handleStripeCheckout}>
-                      Pay with Stripe (test)
-                    </PrimaryButton>
-                    <button className="ghost-button" type="button" onClick={handleRazorpayCheckout}>
-                      Pay with Razorpay (test)
-                    </button>
-                    <button className="ghost-button" type="button" onClick={handleBookTickets}>
-                      Simulate payment
-                    </button>
-                  </div>
-                  {paymentMessage && <p className="booking-message">{paymentMessage}</p>}
-                  {bookingMessage && <p className="booking-message">{bookingMessage}</p>}
-                  {lastBookingErrorCode === "SOLD_OUT" && user ? (
-                    <div className="waitlist-cta">
-                      <p className="auth-note">Sold out for that selection — join the waitlist and we will prioritize you if capacity changes.</p>
-                      <button type="button" className="ghost-button" onClick={joinEventWaitlistForSelection}>
-                        Join waitlist
-                      </button>
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
-          ) : (
-            <EmptyState label="Select an event to book tickets" />
-          )}
-        </section>
-        )}
-
         {user && profileMode === "organiser" && (
           <section id="ewe-organise" className={panelClass("panel span-two", ["organiser"])} ref={organiserRef}>
             <div className="section-head">
@@ -3837,172 +4125,6 @@ export default function App() {
               </PrimaryButton>
             </form>
           </section>
-        )}
-
-        {profileMode === "attendee" && (
-        <section id="ewe-tickets" className={panelClass("panel", ["attendee"])} ref={ticketsRef}>
-          <div className="section-head">
-            <h2>Your QR tickets</h2>
-            <p className="section-note">
-              Live countdown and cancel window show here once events are loaded. After entry, the host scans your QR once — your status
-              here becomes <strong>Checked in</strong> (refresh if needed). Same login can both host and hold tickets; use <strong>My tickets</strong>{" "}
-              as the attendee view and <strong>Check-in</strong> as the door view.
-            </p>
-          </div>
-          <div className="ticket-stack">
-            {myTickets.length ? (
-              myTickets.map((ticket, index) => {
-                const eid = String(ticket.eventId?._id || ticket.eventId || "");
-                const evMerged = (eid && events.find((e) => String(e._id) === eid)) || ticket.eventId;
-                const eventDateVal = evMerged?.date;
-                const isLeadTicket =
-                  myTickets.findIndex((t) => String(t.bookingId) === String(ticket.bookingId)) === index;
-                const eventNotStarted = eventDateVal && new Date(eventDateVal) > new Date();
-                const startMs = eventDateVal ? new Date(eventDateVal).getTime() : NaN;
-                const untilStart = Number.isFinite(startMs) ? Math.max(0, startMs - countdownNow) : null;
-                const bid = String(ticket.bookingId);
-                const minMsBeforeStart = CANCEL_DEADLINE_HOURS_BEFORE * 3600000;
-                const insideCancelWindow = untilStart != null && untilStart >= minMsBeforeStart;
-                const canCancelBooking =
-                  isLeadTicket &&
-                  eventNotStarted &&
-                  ticket.status === "booked" &&
-                  !refundsByBooking[bid] &&
-                  !evMerged?.cancelledAt &&
-                  insideCancelWindow;
-                const showCancelClosed =
-                  isLeadTicket &&
-                  eventNotStarted &&
-                  ticket.status === "booked" &&
-                  !refundsByBooking[bid] &&
-                  !evMerged?.cancelledAt &&
-                  !insideCancelWindow &&
-                  untilStart != null &&
-                  untilStart < minMsBeforeStart;
-
-                return (
-                <article className="ticket-card" key={ticket._id} style={{ animationDelay: `${index * 0.08}s` }}>
-                  <div>
-                    <p className="card-label">Ticket ready</p>
-                    <h3>{evMerged?.title || ticket.eventId?.title}</h3>
-                    <p>{ticket.ticketTypeName}</p>
-                    {eventNotStarted && untilStart != null ? (
-                      <p className="ticket-countdown-line" role="status">
-                        <strong>{formatMsAsCountdown(untilStart)}</strong> until doors · {formatDate(eventDateVal)}
-                      </p>
-                    ) : null}
-                    {canCancelBooking ? (
-                      <p className="auth-note ticket-cancel-hint">
-                        Cancellation: until <strong>{CANCEL_DEADLINE_HOURS_BEFORE}h</strong> before start. Within <strong>5h</strong> of
-                        booking = minimal fee; after that a higher fee applies. Paid refunds <strong>auto-approve ~24h</strong> after you
-                        cancel.
-                      </p>
-                    ) : null}
-                    {showCancelClosed ? (
-                      <p className="auth-note ticket-cancel-hint ticket-cancel-hint--warn">
-                        Cancellation is closed (inside {CANCEL_DEADLINE_HOURS_BEFORE}h of start).
-                      </p>
-                    ) : null}
-                    <div className="meta-list ticket-meta-list">
-                      <span className="ticket-code">{ticket.ticketCode}</span>
-                      <span
-                        className={`ticket-status ${
-                          ticket.status === "checked-in" ? "is-checked-in" : ticket.status === "expired" ? "is-expired" : ""
-                        }`}
-                      >
-                        {ticket.status === "checked-in" ? "Checked in" : ticket.status === "expired" ? "Expired" : ticket.status}
-                      </span>
-                      {refundsByBooking[bid] && (
-                        <span className={`ticket-status ${refundsByBooking[bid].status === "approved" ? "is-checked-in" : ""}`}>
-                          Refund {refundsByBooking[bid].status}
-                        </span>
-                      )}
-                    </div>
-                    {canCancelBooking && (
-                      <button className="ghost-button" type="button" onClick={() => cancelBooking(ticket.bookingId)}>
-                        Cancel booking
-                      </button>
-                    )}
-                    {eventDateVal && new Date(eventDateVal) < new Date() && (evMerged?._id || eid) ? (
-                      <div className="ticket-feedback-hint">
-                        <p className="auth-note">
-                          After the event: leave a <strong>public review</strong> and <strong>private feedback</strong> for the organiser on the
-                          event page (Book tickets → same event).
-                        </p>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => handleSelectEvent(evMerged?._id || eid)}
-                        >
-                          Open event — review & feedback
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="ticket-actions">
-                    <QRCodeSVG id={`qr-${ticket._id}`} value={ticket.ticketCode} size={96} bgColor="#ffffff" fgColor="#0d0f14" />
-                    <button className="ghost-button" type="button" onClick={() => downloadTicketQr(ticket._id, ticket.ticketCode)}>
-                      Download QR
-                    </button>
-                  </div>
-                </article>
-                );
-              })
-            ) : (
-              <EmptyState
-                label="Your booked tickets will appear here"
-                hint="After you attend an event, open it again from Browse to leave a public review and private organiser feedback."
-              />
-            )}
-          </div>
-        </section>
-        )}
-
-        {profileMode === "attendee" && wishlistReminders.length > 0 && (
-          <section id="ewe-reminders" className={panelClass("panel full-width", ["attendee"])}>
-            <div className="section-head">
-              <h2>Upcoming reminders</h2>
-              <p className="section-note">Wishlisted events starting in the next 72 hours (in-app + email when SMTP is configured).</p>
-            </div>
-            <div className="stack-list">
-              {wishlistReminders.map((event) => (
-                <button key={event._id} className="list-button" type="button" onClick={() => handleSelectEvent(event._id)}>
-                  <span>{event.title}</span>
-                  <small>{formatDate(event.date)}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {profileMode === "attendee" && (
-        <section className={panelClass("panel", ["attendee"])}>
-          <div className="section-head">
-            <h2>Wishlist</h2>
-          </div>
-          <div className="stack-list">
-            {wishlistedEvents.length ? (
-              wishlistedEvents.map((event) => (
-                <div key={event._id} className="wishlist-item">
-                  <button className="list-button wishlist-main" type="button" onClick={() => handleSelectEvent(event._id)}>
-                    <span>{event.title}</span>
-                    <small>Reminder set for {formatDate(event.date)}</small>
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button compact-button"
-                    aria-label={`Remove ${event.title} from wishlist`}
-                    onClick={() => toggleWishlist(event._id)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))
-            ) : (
-              <EmptyState label="Save events to get reminder notes here" />
-            )}
-          </div>
-        </section>
         )}
         {user && (profileMode === "organiser" || profileMode === "checkin") && (
           <>
@@ -4318,9 +4440,9 @@ export default function App() {
           </>
         )}
       </main>
-        </div>
-        <SiteFooter />
-      </div>
     </div>
+  </div>
+  <SiteFooter />
+</div>
   );
 }
