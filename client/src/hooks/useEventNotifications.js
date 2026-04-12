@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { playNotificationChime } from "../utils/notifSound.js";
+import {
+  playNotificationChime,
+  isNotifPushEssentialEnabled,
+  setNotifPushEssentialEnabled,
+} from "../utils/notifSound.js";
 
 const INBOX_KEY = "ewe-notif-inbox-v1";
 const FIRED_KEY = "ewe-notif-fired-v1";
 const FOLLOW_SNAP_KEY = "ewe-follow-event-snapshot-v1";
+const DISMISS_KEY = "ewe-notif-permanent-dismiss-v1";
+const SNOOZE_KEY = "ewe-notif-snooze-firekey-v1";
+
+const ESSENTIAL_SNOOZE_MS = 45 * 60 * 1000;
 
 function organiserIdFromEvent(ev) {
   const o = ev?.organiserId;
@@ -28,6 +36,49 @@ function saveJson(key, val) {
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+function loadSnoozeMap() {
+  const raw = loadJson(SNOOZE_KEY, {}) || {};
+  const now = Date.now();
+  const pruned = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "number" && v > now) pruned[k] = v;
+  }
+  if (Object.keys(pruned).length !== Object.keys(raw).length) saveJson(SNOOZE_KEY, pruned);
+  return pruned;
+}
+
+function loadPermanentDismissedSet() {
+  const arr = loadJson(DISMISS_KEY, []);
+  return new Set(Array.isArray(arr) ? arr.map(String) : []);
+}
+
+function inferImportance(id) {
+  if (!id || typeof id !== "string") return "standard";
+  if (
+    id.startsWith("cancel:") ||
+    id.startsWith("start:") ||
+    id.startsWith("texp:") ||
+    id.startsWith("m15:") ||
+    id.startsWith("h1:") ||
+    id.startsWith("arefp:") ||
+    id.startsWith("arefa:") ||
+    id.startsWith("arefr:") ||
+    id.startsWith("hrefp:") ||
+    id.startsWith("hrefa:")
+  ) {
+    return "essential";
+  }
+  return "standard";
+}
+
+function normalizeNotif(x) {
+  return {
+    ...x,
+    importance: x.importance || inferImportance(x.id),
+    fireKey: x.fireKey || x.id,
+  };
 }
 
 function mergedEventForTicket(ticket, events) {
@@ -62,19 +113,38 @@ export function useEventNotifications({
   attendeeRefunds = [],
   hostRefunds = [],
 }) {
-  const [inbox, setInbox] = useState(() => loadJson(INBOX_KEY, []));
+  const permanentDismissedRef = useRef(loadPermanentDismissedSet());
+  const snoozeRef = useRef(loadSnoozeMap());
   const firedRef = useRef(new Set(loadJson(FIRED_KEY, [])));
 
+  const [inbox, setInbox] = useState(() => {
+    const raw = loadJson(INBOX_KEY, []);
+    const dismissed = permanentDismissedRef.current;
+    const list = Array.isArray(raw) ? raw : [];
+    const filtered = list.filter((x) => x && !dismissed.has(x.id));
+    if (filtered.length !== list.length) saveJson(INBOX_KEY, filtered);
+    return filtered.map(normalizeNotif);
+  });
+
+  const [pushEssentialEnabled, setPushEssentialState] = useState(() => isNotifPushEssentialEnabled());
+
+  const setPushEssentialEnabled = useCallback((on) => {
+    setNotifPushEssentialEnabled(on);
+    setPushEssentialState(on);
+  }, []);
+
   const addNotif = useCallback((item) => {
-    const canDesktop = typeof Notification !== "undefined" && Notification.permission === "granted";
+    if (permanentDismissedRef.current.has(item.id)) return;
     setInbox((prev) => {
       if (prev.some((x) => x.id === item.id)) return prev;
-      const next = [{ ...item, read: false, at: Date.now() }, ...prev].slice(0, 60);
+      const row = normalizeNotif({ ...item, read: false, at: Date.now() });
+      const next = [row, ...prev].slice(0, 60);
       saveJson(INBOX_KEY, next);
-      playNotificationChime();
-      if (canDesktop) {
+      playNotificationChime({ essential: row.importance === "essential" });
+      const canDesktop = typeof Notification !== "undefined" && Notification.permission === "granted";
+      if (canDesktop && isNotifPushEssentialEnabled() && row.importance === "essential") {
         try {
-          new Notification(item.title, { body: item.body, tag: item.id });
+          new Notification(row.title, { body: row.body, tag: row.id });
         } catch {
           /* ignore */
         }
@@ -85,10 +155,16 @@ export function useEventNotifications({
 
   const fire = useCallback(
     (key, payload) => {
+      const importance = payload.importance || "standard";
+      const full = { ...payload, fireKey: payload.fireKey || key, importance };
+      if (permanentDismissedRef.current.has(full.id)) return false;
+      const now = Date.now();
+      const snoozeUntil = snoozeRef.current[key];
+      if (typeof snoozeUntil === "number" && now < snoozeUntil) return false;
       if (firedRef.current.has(key)) return false;
       firedRef.current.add(key);
       saveJson(FIRED_KEY, [...firedRef.current]);
-      addNotif(payload);
+      addNotif(full);
       return true;
     },
     [addNotif]
@@ -110,6 +186,7 @@ export function useEventNotifications({
             title: "Ticket expired",
             body: `${ev?.title || "Your event"} has ended — this pass is no longer valid for entry.`,
             link: eid ? `/event/${eid}` : "/",
+            importance: "essential",
           });
         }
       }
@@ -132,6 +209,7 @@ export function useEventNotifications({
             title: "Event cancelled",
             body: `${ev.title} is cancelled. Check your email or request a refund if you paid.`,
             link: `/event/${eid}`,
+            importance: "essential",
           });
           continue;
         }
@@ -142,6 +220,7 @@ export function useEventNotifications({
             title: "Event is starting",
             body: ev.title,
             link: `/event/${eid}`,
+            importance: "essential",
           });
         } else if (delta <= 15 * 60 * 1000) {
           fire(`m15:${eid}`, {
@@ -149,6 +228,7 @@ export function useEventNotifications({
             title: "Starts in under 15 minutes",
             body: ev.title,
             link: `/event/${eid}`,
+            importance: "essential",
           });
         } else if (delta <= 60 * 60 * 1000) {
           fire(`h1:${eid}`, {
@@ -156,6 +236,7 @@ export function useEventNotifications({
             title: "Starts within 1 hour",
             body: ev.title,
             link: `/event/${eid}`,
+            importance: "essential",
           });
         } else if (delta <= 24 * 60 * 60 * 1000) {
           fire(`d1:${eid}`, {
@@ -163,6 +244,7 @@ export function useEventNotifications({
             title: "Starts within 24 hours",
             body: `${ev.title} — ${formatMsAsCountdown(delta)} to go.`,
             link: `/event/${eid}`,
+            importance: "standard",
           });
         } else if (delta <= 7 * 24 * 60 * 60 * 1000) {
           fire(`w7:${eid}`, {
@@ -170,6 +252,7 @@ export function useEventNotifications({
             title: "Event this week",
             body: `${ev.title} — ${formatMsAsCountdown(delta)} until doors.`,
             link: `/event/${eid}`,
+            importance: "standard",
           });
         }
       }
@@ -201,6 +284,7 @@ export function useEventNotifications({
               title: `New from ${nameByOrganiser.get(String(oid)) || "a host you follow"}`,
               body: ev.title,
               link: `/event/${eid}`,
+              importance: "standard",
             });
           }
           if (ids.length !== prev.length || ids.some((id, i) => id !== prev[i])) {
@@ -234,6 +318,7 @@ export function useEventNotifications({
               title: "Early bird ending soon",
               body: `${ev.title} — ${tt.name} promo price ends ${new Date(tt.earlyBirdEndsAt).toLocaleDateString()}.`,
               link: `/event/${eid}`,
+              importance: "standard",
             });
           }
         }
@@ -258,7 +343,8 @@ export function useEventNotifications({
           id: `arefp:${id}`,
           title: "Refund in progress",
           body: `${title}: fee ${fee}, net ${net}. Auto-approve by ${when}.`,
-          link: "/",
+          link: "/tickets",
+          importance: "essential",
         });
       }
       if (r.status === "approved" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
@@ -266,7 +352,8 @@ export function useEventNotifications({
           id: `arefa:${id}`,
           title: "Refund approved",
           body: `${title}: net ${r.refundNetAmount ?? ""} marked settled.`,
-          link: "/",
+          link: "/tickets",
+          importance: "essential",
         });
       }
       if (r.status === "rejected" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
@@ -274,7 +361,8 @@ export function useEventNotifications({
           id: `arefr:${id}`,
           title: "Refund update",
           body: `${title}: request was not approved — check email or support.`,
-          link: "/",
+          link: "/tickets",
+          importance: "essential",
         });
       }
     }
@@ -291,7 +379,8 @@ export function useEventNotifications({
           id: `hrefp:${id}`,
           title: "Refund request",
           body: `${who} · ${title} · net ${r.refundNetAmount ?? "—"} after fee · auto-approves on schedule.`,
-          link: "/",
+          link: "/check-in",
+          importance: "essential",
         });
       }
       if (r.status === "approved" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
@@ -299,7 +388,8 @@ export function useEventNotifications({
           id: `hrefa:${id}`,
           title: "Refund finalized",
           body: `${title}: ${who} — net ${r.refundNetAmount ?? ""} left your payout balance.`,
-          link: "/",
+          link: "/check-in",
+          importance: "essential",
         });
       }
     }
@@ -323,6 +413,29 @@ export function useEventNotifications({
     });
   }, []);
 
+  const dismissNotif = useCallback((id) => {
+    setInbox((prev) => {
+      const item = prev.find((x) => x.id === id);
+      if (!item) return prev;
+      const next = prev.filter((x) => x.id !== id);
+      saveJson(INBOX_KEY, next);
+      const row = normalizeNotif(item);
+      const fk = row.fireKey || row.id;
+      if (row.importance === "essential") {
+        firedRef.current.delete(fk);
+        saveJson(FIRED_KEY, [...firedRef.current]);
+        const until = Date.now() + ESSENTIAL_SNOOZE_MS;
+        const snooze = { ...snoozeRef.current, [fk]: until };
+        snoozeRef.current = snooze;
+        saveJson(SNOOZE_KEY, snooze);
+      } else {
+        permanentDismissedRef.current.add(id);
+        saveJson(DISMISS_KEY, [...permanentDismissedRef.current]);
+      }
+      return next;
+    });
+  }, []);
+
   const requestDesktopPermission = useCallback(async () => {
     if (typeof Notification === "undefined") return "unsupported";
     if (Notification.permission === "granted") return "granted";
@@ -335,8 +448,11 @@ export function useEventNotifications({
     unreadCount,
     markRead,
     markAllRead,
+    dismissNotif,
     requestDesktopPermission,
     desktopSupported: typeof Notification !== "undefined",
     desktopPermission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+    pushEssentialEnabled,
+    setPushEssentialEnabled,
   };
 }

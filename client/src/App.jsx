@@ -91,11 +91,14 @@ function NotificationsPanel({
   notifications,
   markRead,
   markAllRead,
+  dismissNotif,
   navigate,
   flash,
   desktopSupported,
   desktopPermission,
   requestDesktopPermission,
+  pushEssentialEnabled,
+  setPushEssentialEnabled,
   ticketPreview = [],
   followingHosts = [],
   formatMsAsCountdown: fmtCountdown,
@@ -128,12 +131,29 @@ function NotificationsPanel({
                 className="ghost-button compact-button"
                 onClick={() =>
                   requestDesktopPermission().then((p) => {
-                    if (p === "granted") flash("Desktop alerts enabled for this browser.");
+                    if (p === "granted") flash("Browser notifications allowed — essentials can show in the system tray when enabled below.");
                     else if (p === "denied") flash("Notifications blocked in browser settings.", true);
                   })
                 }
               >
-                Enable desktop alerts
+                Allow browser notifications
+              </button>
+            ) : null}
+            {desktopSupported && desktopPermission === "granted" ? (
+              <button
+                type="button"
+                className="ghost-button compact-button"
+                onClick={() => {
+                  const next = !pushEssentialEnabled;
+                  setPushEssentialEnabled(next);
+                  flash(
+                    next
+                      ? "System banners on for essentials (cancel, doors, refunds, etc.)."
+                      : "System banners off — alerts stay in-app only."
+                  );
+                }}
+              >
+                {pushEssentialEnabled ? "System: essentials on" : "System: essentials off"}
               </button>
             ) : null}
             <button
@@ -154,8 +174,10 @@ function NotificationsPanel({
           </div>
         </div>
         <p className="notif-panel-hint">
-          Countdowns tick every second while this panel is open. Milestone alerts (week-of, 24h, 1h, etc.) check every ~10s while the tab is
-          open — a short chime plays unless muted. Refunds and host summaries also land here.
+          Milestones refresh about every 10s while the app is open. New alerts play a short chime (unless muted). Use{" "}
+          <strong>Remove</strong> to clear an item: routine reminders stay gone; <strong>essentials</strong> (cancel, doors soon, refunds…) can
+          come back after ~45 minutes if the situation still applies. Allow browser notifications + keep &quot;System: essentials on&quot; to
+          mirror those urgent items to your desktop or phone tray (where the OS supports it).
         </p>
 
         {ticketPreview.length > 0 ? (
@@ -215,23 +237,46 @@ function NotificationsPanel({
           {notifications.length === 0 && ticketPreview.length > 0 ? (
             <li className="auth-note notif-empty">No milestone alerts in your inbox yet — your countdowns are in the list above.</li>
           ) : null}
-          {notifications.map((n) => (
-            <li key={n.id} className={`notif-item${n.read ? " is-read" : ""}`}>
-              <button
-                type="button"
-                className="notif-item-main"
-                onClick={() => {
-                  markRead(n.id);
-                  onClose();
-                  if (n.link) navigate(n.link);
-                }}
-              >
-                <strong>{n.title}</strong>
-                <span>{n.body}</span>
-                <span className="notif-item-time">{new Date(n.at).toLocaleString()}</span>
-              </button>
-            </li>
-          ))}
+          {notifications.map((n) => {
+            const essential = n.importance === "essential";
+            return (
+              <li key={n.id} className={`notif-item${n.read ? " is-read" : ""}${essential ? " notif-item--essential" : ""}`}>
+                <div className="notif-item-row">
+                  <button
+                    type="button"
+                    className="notif-item-main"
+                    onClick={() => {
+                      markRead(n.id);
+                      onClose();
+                      if (n.link) navigate(n.link);
+                    }}
+                  >
+                    {essential ? <span className="notif-item-pill">Essential</span> : null}
+                    <strong>{n.title}</strong>
+                    <span>{n.body}</span>
+                    <span className="notif-item-time">{new Date(n.at).toLocaleString()}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="notif-item-remove"
+                    title={essential ? "Remove for now — may return if still relevant" : "Remove permanently"}
+                    aria-label={essential ? "Remove essential alert for now" : "Remove alert permanently"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dismissNotif(n.id);
+                      flash(
+                        essential
+                          ? "Removed — essentials can reappear later if still relevant."
+                          : "Removed — this reminder will not be shown again."
+                      );
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </>
@@ -355,9 +400,12 @@ export default function App() {
     unreadCount,
     markRead,
     markAllRead,
+    dismissNotif,
     requestDesktopPermission,
     desktopSupported,
     desktopPermission,
+    pushEssentialEnabled,
+    setPushEssentialEnabled,
   } = useEventNotifications({
     user,
     myTickets,
@@ -2587,11 +2635,14 @@ export default function App() {
           notifications={notifications}
           markRead={markRead}
           markAllRead={markAllRead}
+          dismissNotif={dismissNotif}
           navigate={navigate}
           flash={flash}
           desktopSupported={desktopSupported}
           desktopPermission={desktopPermission}
           requestDesktopPermission={requestDesktopPermission}
+          pushEssentialEnabled={pushEssentialEnabled}
+          setPushEssentialEnabled={setPushEssentialEnabled}
           ticketPreview={ticketNotificationsPreview}
           followingHosts={followingHosts}
           formatMsAsCountdown={formatMsAsCountdown}
@@ -2762,11 +2813,14 @@ export default function App() {
           notifications={notifications}
           markRead={markRead}
           markAllRead={markAllRead}
+          dismissNotif={dismissNotif}
           navigate={navigate}
           flash={flash}
           desktopSupported={desktopSupported}
           desktopPermission={desktopPermission}
           requestDesktopPermission={requestDesktopPermission}
+          pushEssentialEnabled={pushEssentialEnabled}
+          setPushEssentialEnabled={setPushEssentialEnabled}
           ticketPreview={ticketNotificationsPreview}
           followingHosts={followingHosts}
           formatMsAsCountdown={formatMsAsCountdown}
@@ -3042,11 +3096,14 @@ export default function App() {
           notifications={notifications}
           markRead={markRead}
           markAllRead={markAllRead}
+          dismissNotif={dismissNotif}
           navigate={navigate}
           flash={flash}
           desktopSupported={desktopSupported}
           desktopPermission={desktopPermission}
           requestDesktopPermission={requestDesktopPermission}
+          pushEssentialEnabled={pushEssentialEnabled}
+          setPushEssentialEnabled={setPushEssentialEnabled}
           ticketPreview={ticketNotificationsPreview}
           followingHosts={followingHosts}
           formatMsAsCountdown={formatMsAsCountdown}
@@ -4317,11 +4374,14 @@ export default function App() {
         notifications={notifications}
         markRead={markRead}
         markAllRead={markAllRead}
+        dismissNotif={dismissNotif}
         navigate={navigate}
         flash={flash}
         desktopSupported={desktopSupported}
         desktopPermission={desktopPermission}
         requestDesktopPermission={requestDesktopPermission}
+        pushEssentialEnabled={pushEssentialEnabled}
+        setPushEssentialEnabled={setPushEssentialEnabled}
         ticketPreview={ticketNotificationsPreview}
         followingHosts={followingHosts}
         formatMsAsCountdown={formatMsAsCountdown}
