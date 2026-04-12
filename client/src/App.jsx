@@ -174,10 +174,11 @@ function NotificationsPanel({
           </div>
         </div>
         <p className="notif-panel-hint">
-          Milestones refresh about every 10s while the app is open. New alerts play a short chime (unless muted). Use{" "}
-          <strong>Remove</strong> to clear an item: routine reminders stay gone; <strong>essentials</strong> (cancel, doors soon, refunds…) can
-          come back after ~45 minutes if the situation still applies. Allow browser notifications + keep &quot;System: essentials on&quot; to
-          mirror those urgent items to your desktop or phone tray (where the OS supports it).
+          Milestones refresh about every 10s while the app is open. Booked events between ~1 and 30 days out also get at most one &quot;Your
+          ticket · coming up&quot; reminder per local day. New alerts play a short chime (unless muted). Use <strong>Remove</strong> to clear an
+          item: routine reminders stay gone; <strong>essentials</strong> (cancel, doors soon, refunds…) can come back after ~45 minutes if the
+          situation still applies. Allow browser notifications + keep &quot;System: essentials on&quot; to mirror those urgent items to your
+          desktop or phone tray (where the OS supports it).
         </p>
 
         {ticketPreview.length > 0 ? (

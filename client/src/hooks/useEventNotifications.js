@@ -10,8 +10,13 @@ const FIRED_KEY = "ewe-notif-fired-v1";
 const FOLLOW_SNAP_KEY = "ewe-follow-event-snapshot-v1";
 const DISMISS_KEY = "ewe-notif-permanent-dismiss-v1";
 const SNOOZE_KEY = "ewe-notif-snooze-firekey-v1";
+/** Last local calendar day (YYYY-MM-DD) we queued a daily reminder per event id */
+const DAILY_BOOKING_KEY = "ewe-notif-daily-booking-v1";
 
 const ESSENTIAL_SNOOZE_MS = 45 * 60 * 1000;
+const MS_DAY = 24 * 60 * 60 * 1000;
+/** Daily digest for ticketed events more than 24h away, up to this many days out (then week-of milestones carry you in). */
+const DAILY_BOOKING_HORIZON_DAYS = 30;
 
 function organiserIdFromEvent(ev) {
   const o = ev?.organiserId;
@@ -52,6 +57,14 @@ function loadSnoozeMap() {
 function loadPermanentDismissedSet() {
   const arr = loadJson(DISMISS_KEY, []);
   return new Set(Array.isArray(arr) ? arr.map(String) : []);
+}
+
+function localDateKey(ms = Date.now()) {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function inferImportance(id) {
@@ -257,6 +270,59 @@ export function useEventNotifications({
         }
       }
 
+      const todayStr = localDateKey(now);
+      const dailyBookingLast = loadJson(DAILY_BOOKING_KEY, {}) || {};
+      let dailyBookingDirty = false;
+      const bookedEventIdsForDaily = new Set();
+
+      for (const t of myTickets) {
+        if (t.status === "refunded" || t.status === "expired") continue;
+        const ev = mergedEventForTicket(t, events);
+        const eid = String(ev?._id || t.eventId?._id || t.eventId || "");
+        if (!eid || !ev?.date) continue;
+        const start = new Date(ev.date).getTime();
+        if (Number.isNaN(start) || start <= now) continue;
+        if (ev.cancelledAt) continue;
+
+        bookedEventIdsForDaily.add(eid);
+
+        const delta = start - now;
+        if (delta <= MS_DAY) continue;
+        if (delta > DAILY_BOOKING_HORIZON_DAYS * MS_DAY) continue;
+
+        if (dailyBookingLast[eid] === todayStr) continue;
+
+        const notifId = `dailybook:${eid}:${todayStr}`;
+        if (permanentDismissedRef.current.has(notifId)) {
+          dailyBookingLast[eid] = todayStr;
+          dailyBookingDirty = true;
+          continue;
+        }
+
+        dailyBookingLast[eid] = todayStr;
+        dailyBookingDirty = true;
+        addNotif({
+          id: notifId,
+          title: "Your ticket · coming up",
+          body: `${ev.title} — ${new Date(ev.date).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} (${formatMsAsCountdown(
+            delta,
+            { withSeconds: false }
+          )} to go).`,
+          link: `/event/${eid}`,
+          importance: "standard",
+          fireKey: notifId,
+        });
+      }
+
+      for (const eid of Object.keys(dailyBookingLast)) {
+        if (!bookedEventIdsForDaily.has(eid)) {
+          delete dailyBookingLast[eid];
+          dailyBookingDirty = true;
+        }
+      }
+
+      if (dailyBookingDirty) saveJson(DAILY_BOOKING_KEY, dailyBookingLast);
+
       const snap = loadJson(FOLLOW_SNAP_KEY, {});
       let snapDirty = false;
       const followingIds = new Set(followingList.map((f) => String(f.organiserId)));
@@ -328,7 +394,7 @@ export function useEventNotifications({
     run();
     const id = setInterval(run, 10000);
     return () => clearInterval(id);
-  }, [user, myTickets, events, wishlist, followingList, fire]);
+  }, [user, myTickets, events, wishlist, followingList, fire, addNotif]);
 
   useEffect(() => {
     if (!user) return;
