@@ -4,15 +4,15 @@
  */
 
 export const demoOrganiser = {
-  name: "Veda Summit Co.",
+  name: "Priya Menon",
   email: "demo.organiser@eventwithease.com",
   password: "demo1234",
   role: "organiser",
   roles: ["organiser", "attendee"],
-  hostTagline: "Flagship conferences & trade floors · Pan-India",
+  hostTagline: "Producer · conferences & product summits · Bengaluru",
   hostBio:
-    "Veda Summit Co. produces conferences, expos, and corporate summits with tight ops, sponsor-ready layouts, and attendee journeys that feel effortless from RSVP to exit.",
-  linkedinUrl: "https://linkedin.com/company/veda-summit-co-demo",
+    "Priya programmes flagship conferences and leadership summits across India—tight run-of-show, sponsor-ready layouts, and attendee journeys that feel calm from doors to close.",
+  linkedinUrl: "https://linkedin.com/in/example-priya-menon",
   twitterUrl: "https://x.com",
   instagramUrl: "https://instagram.com",
   websiteUrl: "https://eventwithease.com",
@@ -59,7 +59,7 @@ export const demoEvents = [
     date: "2025-09-14T10:00:00.000Z",
     coverImage: u("photo-1470229722913-7c0e2dbbafd3"),
     agenda: ["10:00 Trade floor opens", "13:30 Line-array shootout", "16:00 Touring life Q&A", "18:00 Networking"],
-    speakers: ["Riya Sound Labs", "TourCraft India", "Veda Summit Co."],
+    speakers: ["Riya Sound Labs", "TourCraft India", "Priya Menon"],
     faq: [
       { question: "Parking?", answer: "Paid parking at the venue; EV charging on level B1." },
       { question: "Badges?", answer: "Digital QR on your phone is enough at entry." },
@@ -193,6 +193,102 @@ export const demoEvents = [
     venueMapUrl: "https://maps.google.com/?q=Sheraton+Grand+Bengaluru",
     ticketTypes: [{ name: "Leader pass", price: 4999, quantity: 120 }, { name: "Emerging lead", price: 2999, quantity: 60 }],
   },
+  {
+    title: "Bengaluru Writers Salon 2025",
+    description:
+      "Evening readings, craft-of-editing breakout, and a quiet networking tea for authors, editors, and newsletter-first founders.",
+    location: "Church Street Social Library Room, Bengaluru",
+    city: "Bengaluru",
+    venueType: "physical",
+    category: "Community",
+    date: "2025-10-04T17:00:00.000Z",
+    coverImage: u("photo-1456513080510-7bf3a84b82f8"),
+    agenda: ["17:00 Doors", "17:30 Open mic", "19:00 Guest reader", "20:30 Mingle"],
+    speakers: ["Lit Bangalore", "Priya Menon"],
+    faq: [{ question: "Bring drafts?", answer: "Optional; sign-up sheet at the door for 5-minute slots." }],
+    venueMapUrl: "https://maps.google.com/?q=Church+Street+Social+Bengaluru",
+    ticketTypes: [{ name: "Salon seat", price: 349, quantity: 90 }, { name: "Patron", price: 799, quantity: 25 }],
+  },
+  {
+    title: "Mumbai Comedy Store Night 2025",
+    description:
+      "Curated stand-up hour plus improv jam with rotating Mumbai open-micers and one touring headliner.",
+    location: "Lower Parel Comedy Cellar, Mumbai",
+    city: "Mumbai",
+    venueType: "physical",
+    category: "Community",
+    date: "2025-10-25T20:00:00.000Z",
+    coverImage: u("photo-1503095396549-807759245b35"),
+    agenda: ["20:00 Doors", "20:30 Support acts", "21:30 Headliner", "22:45 Close"],
+    speakers: ["Rahul Iyer", "Bombay Mic Club"],
+    faq: [{ question: "Age limit?", answer: "18+ after 21:00; earlier slot is all ages." }],
+    venueMapUrl: "https://maps.google.com/?q=Lower+Parel+Mumbai",
+    ticketTypes: [{ name: "General", price: 599, quantity: 200 }, { name: "Front row", price: 999, quantity: 40 }],
+  },
+  {
+    title: "Hyderabad Design Critique 2025",
+    description:
+      "Portfolio desk reviews with senior IC designers from product companies — bring Figma links and a thick skin.",
+    location: "T-Hub Phase 2, Hyderabad",
+    city: "Hyderabad",
+    venueType: "physical",
+    category: "Workshop",
+    date: "2025-11-02T14:00:00.000Z",
+    coverImage: u("photo-1581291518857-4e27b48ff24e"),
+    agenda: ["14:00 Check-in", "14:30 Rotations", "18:00 Group critique", "19:00 Close"],
+    speakers: ["Simran Khanna", "Pixel South"],
+    faq: [{ question: "Laptop?", answer: "Yes; reviewers will annotate live." }],
+    venueMapUrl: "https://maps.google.com/?q=T-Hub+Hyderabad",
+    ticketTypes: [{ name: "Participant", price: 799, quantity: 70 }, { name: "Observer", price: 299, quantity: 40 }],
+  },
+  {
+    title: "Kochi Sunsets Acoustic 2025",
+    description:
+      "Rooftop unplugged set with Kerala-rooted originals, tabla brushes, and single-mic storytelling between songs.",
+    location: "Fort Kochi Rooftop Arts, Kochi",
+    city: "Kochi",
+    venueType: "physical",
+    category: "Music",
+    date: "2025-11-16T18:00:00.000Z",
+    coverImage: u("photo-1511379938547-c1f69419868d"),
+    agenda: ["18:00 Doors", "18:45 Set 1", "20:00 Set 2", "21:15 Close"],
+    speakers: ["Meera Patel", "Coastal Strings"],
+    faq: [{ question: "Seating?", answer: "Low stools + some floor cushions; arrive early for front." }],
+    venueMapUrl: "https://maps.google.com/?q=Fort+Kochi",
+    ticketTypes: [{ name: "Standard", price: 649, quantity: 120 }, { name: "Balcony", price: 1099, quantity: 35 }],
+  },
+  {
+    title: "Jaipur Photo Walk 2025",
+    description:
+      "Golden hour in the Pink City bazaars with mentor loops on composition and street ethics; small group cap.",
+    location: "Hawa Mahal East Gate, Jaipur",
+    city: "Jaipur",
+    venueType: "physical",
+    category: "Art",
+    date: "2025-11-30T06:30:00.000Z",
+    coverImage: u("photo-1469474968028-56623f02e42e"),
+    agenda: ["06:30 Meet", "07:00 Walk block 1", "08:30 Chai debrief", "09:30 Wrap"],
+    speakers: ["Arjun Natesan", "Desert Frame Club"],
+    faq: [{ question: "Gear?", answer: "Phone OK; DSLR renters available on-site (limited)." }],
+    venueMapUrl: "https://maps.google.com/?q=Hawa+Mahal+Jaipur",
+    ticketTypes: [{ name: "Walk pass", price: 499, quantity: 28 }, { name: "Walk + review", price: 899, quantity: 12 }],
+  },
+  {
+    title: "Kolkata Indie Book Fair 2025",
+    description:
+      "Regional presses, zine tables, and author signings in a single hall — Bengali and English stacks side by side.",
+    location: "Oxford Bookstore Park Street Hall, Kolkata",
+    city: "Kolkata",
+    venueType: "physical",
+    category: "Community",
+    date: "2025-12-08T11:00:00.000Z",
+    coverImage: u("photo-1524995997946-a1c029e0a442"),
+    agenda: ["11:00 Doors", "13:00 Publisher panel", "16:00 Zine swap", "19:00 Close"],
+    speakers: ["Vikram Choudhury", "Little Press Kolkata"],
+    faq: [{ question: "Cash?", answer: "Most stalls take UPI; a few zines cash-only." }],
+    venueMapUrl: "https://maps.google.com/?q=Park+Street+Kolkata",
+    ticketTypes: [{ name: "Entry", price: 99, quantity: 2000 }, { name: "Tote + catalog", price: 349, quantity: 300 }],
+  },
   // —— Original + extended upcoming ——
   {
     title: "Hack Night 2026",
@@ -205,7 +301,7 @@ export const demoEvents = [
     date: "2026-05-01T18:30:00.000Z",
     coverImage: u("photo-1517048676732-d65bc937f952"),
     agenda: ["18:30 - Doors open", "19:00 - Kickoff keynote", "20:30 - Demo showcase"],
-    speakers: ["Veda Summit Co.", "Guest Mentor"],
+    speakers: ["Priya Menon", "Guest Mentor"],
     faq: [{ question: "Is food included?", answer: "Light snacks and coffee are provided." }],
     venueMapUrl: "https://maps.google.com/?q=Bangalore+International+Centre",
     discountCodes: [{ code: "HACK10", type: "percent", value: 10, expiresAt: "2026-04-30" }],
@@ -536,6 +632,18 @@ export const bulkReviews = [
   ["Chennai Indie Film Showcase 2025", 5, "Loved the regional shorts block.", "crowd.tara@eventwithease.com"],
   ["Kolkata Winter Street Food Fest 2025", 5, "Kids’ corner was staffed — parents could actually eat.", "crowd.ishita@eventwithease.com"],
   ["Pune Design Weekender 2025", 4, "Coffee ran out between sessions — minor fix.", "crowd.neha@eventwithease.com"],
+  ["Bengaluru Writers Salon 2025", 5, "Intimate room — heard every word.", "crowd.aarav@eventwithease.com"],
+  ["Bengaluru Writers Salon 2025", 4, "Would love a winter edition too.", "crowd.diya@eventwithease.com"],
+  ["Mumbai Comedy Store Night 2025", 5, "Headliner was worth twice the ticket.", "crowd.kabir@eventwithease.com"],
+  ["Mumbai Comedy Store Night 2025", 4, "Room gets warm — dress light.", "crowd.neha@eventwithease.com"],
+  ["Hyderabad Design Critique 2025", 5, "Reviewers were direct but kind. Grew a ton in one afternoon.", "crowd.ishita@eventwithease.com"],
+  ["Hyderabad Design Critique 2025", 5, "Rotations kept on schedule — rare.", "crowd.arjun@eventwithease.com"],
+  ["Kochi Sunsets Acoustic 2025", 5, "Sound on the roof was surprisingly clean.", "crowd.meera@eventwithease.com"],
+  ["Kochi Sunsets Acoustic 2025", 4, "Wish there were more low seats.", "crowd.sid@eventwithease.com"],
+  ["Jaipur Photo Walk 2025", 5, "Mentor feedback between blocks was gold.", "crowd.tara@eventwithease.com"],
+  ["Jaipur Photo Walk 2025", 5, "Golden hour timing was perfect.", "crowd.ananya@eventwithease.com"],
+  ["Kolkata Indie Book Fair 2025", 5, "Zine swap corner was my highlight.", "crowd.dev@eventwithease.com"],
+  ["Kolkata Indie Book Fair 2025", 4, "Hall was crowded Saturday noon.", "crowd.priya@eventwithease.com"],
 ];
 
 /** Private feedback for organiser dashboard — past events */
@@ -548,6 +656,9 @@ export const bulkFeedback = [
   ["Goa Beach Startup Brunch 2025", 5, "Perfect length. Not a minute of fluff.", "crowd.diya@eventwithease.com"],
   ["Kolkata Winter Street Food Fest 2025", 5, "Stall map in the app was accurate — rare!", "crowd.yash@eventwithease.com"],
   ["Bengaluru Product Leadership Summit 2025", 5, "Coffee ran out at 4pm — otherwise flawless.", "crowd.kabir@eventwithease.com"],
+  ["Bengaluru Writers Salon 2025", 5, "Please publish the reader list next time — great discovery.", "crowd.aarav@eventwithease.com"],
+  ["Hyderabad Design Critique 2025", 5, "More power strips in review corners would help.", "crowd.dev@eventwithease.com"],
+  ["Kochi Sunsets Acoustic 2025", 4, "Balcony sightlines were tight for tall folks.", "crowd.neha@eventwithease.com"],
 ];
 
 /**
@@ -571,46 +682,74 @@ export const bookingSeeds = [
   ["Ahmedabad Startup Grind 2026", "crowd.karan@eventwithease.com", "Attendee", 1, true],
 ];
 
-/** Additional demo hosts (seed creates accounts; use eventHostEmailByTitle to assign events). */
+/** Additional demo hosts — real-style individual names (seed creates accounts). */
 export const extraDemoHosts = [
   {
-    name: "Neon Circuit Live",
-    email: "pulse.host@eventwithease.com",
+    name: "Rahul Iyer",
+    email: "rahul.iyer@eventwithease.com",
     password: "demo1234",
     role: "organiser",
     roles: ["organiser", "attendee"],
-    hostTagline: "Indie stages & night culture · Western India",
+    hostTagline: "Live culture · music, comedy & night experiences · Mumbai",
     hostBio:
-      "Neon Circuit Live programmes open-air gigs, listening rooms, and artist-first collabs. Follow for presale drops and reel drops from the road.",
-    linkedinUrl: "https://linkedin.com/company/neon-circuit-live-demo",
+      "Rahul curates live rooms and open-air culture nights—tight line-ups, fair artist splits, and audiences who actually show up on time.",
+    linkedinUrl: "https://linkedin.com/in/example-rahul-iyer",
     twitterUrl: "https://x.com",
     instagramUrl: "https://instagram.com",
     websiteUrl: "https://eventwithease.com",
   },
   {
-    name: "Orbit Founders Guild",
-    email: "grid.host@eventwithease.com",
+    name: "Simran Khanna",
+    email: "simran.khanna@eventwithease.com",
     password: "demo1234",
     role: "organiser",
     roles: ["organiser", "attendee"],
-    hostTagline: "Startup sprints, investor rooms & founder education",
+    hostTagline: "Tech & design communities · Hyderabad & remote",
     hostBio:
-      "Orbit Founders Guild runs sprint summits, office-hour circuits, and sector deep dives — connecting builders with operators who have shipped at scale.",
-    linkedinUrl: "https://linkedin.com/company/orbit-founders-guild-demo",
+      "Simran runs builder nights, OSS days, and critique-first design meetups—fewer slides, more shipping and honest feedback.",
+    linkedinUrl: "https://linkedin.com/in/example-simran-khanna",
     twitterUrl: "https://x.com",
     instagramUrl: "https://instagram.com",
     websiteUrl: "https://eventwithease.com",
   },
   {
-    name: "Third Place Collective",
-    email: "luma.host@eventwithease.com",
+    name: "Vikram Choudhury",
+    email: "vikram.choudhury@eventwithease.com",
     password: "demo1234",
     role: "organiser",
     roles: ["organiser", "attendee"],
-    hostTagline: "Neighborhood culture · walks, games & slow evenings",
+    hostTagline: "Design weeks, indie publishing & creative weekends",
     hostBio:
-      "Third Place Collective hosts low-key community nights, city walks, and creative meetups where strangers become regulars. Follow for weekend lineups.",
-    linkedinUrl: "https://linkedin.com/company/third-place-collective-demo",
+      "Vikram programmes multi-day design and arts weekends with small cohorts, clear schedules, and space for real portfolio work.",
+    linkedinUrl: "https://linkedin.com/in/example-vikram-choudhury",
+    twitterUrl: "https://x.com",
+    instagramUrl: "https://instagram.com",
+    websiteUrl: "https://eventwithease.com",
+  },
+  {
+    name: "Meera Patel",
+    email: "meera.patel@eventwithease.com",
+    password: "demo1234",
+    role: "organiser",
+    roles: ["organiser", "attendee"],
+    hostTagline: "South India stages · intimate music & film",
+    hostBio:
+      "Meera books acoustic rooms, hybrid streams, and film-forward evenings where sound quality and respectful crowds come first.",
+    linkedinUrl: "https://linkedin.com/in/example-meera-patel",
+    twitterUrl: "https://x.com",
+    instagramUrl: "https://instagram.com",
+    websiteUrl: "https://eventwithease.com",
+  },
+  {
+    name: "Arjun Natesan",
+    email: "arjun.natesan@eventwithease.com",
+    password: "demo1234",
+    role: "organiser",
+    roles: ["organiser", "attendee"],
+    hostTagline: "Founder circles, runs & weekend field trips",
+    hostBio:
+      "Arjun hosts founder brunches, angel office hours, and movement-forward weekends—always with clear agendas and on-time transitions.",
+    linkedinUrl: "https://linkedin.com/in/example-arjun-natesan",
     twitterUrl: "https://x.com",
     instagramUrl: "https://instagram.com",
     websiteUrl: "https://eventwithease.com",
@@ -621,28 +760,58 @@ export const extraDemoHosts = [
 export const demoCancelledEventTitle = "Design Jam Workshop";
 export const demoCancelledEventAt = "2026-04-10T08:00:00.000Z";
 
-/** Map event title → host email (default: demo organiser). */
+/**
+ * Every listed event is assigned to a host so Discover shows varied names.
+ * Emails: demo.organiser@ (Priya), rahul.iyer@, simran.khanna@, vikram.choudhury@, meera.patel@, arjun.natesan@
+ * Titles not listed fall back to demo organiser in seed.
+ */
 export const eventHostEmailByTitle = {
-  "City Beats Live": "pulse.host@eventwithease.com",
-  "Monsoon Jazz & Coffee — Kochi": "pulse.host@eventwithease.com",
-  "North East Folk & Electronic — Shillong (stream)": "pulse.host@eventwithease.com",
-  "Street Art Walk & Auction — Mumbai": "pulse.host@eventwithease.com",
-  "Pune Coffee Championships 2026": "pulse.host@eventwithease.com",
-  "Open Source Saturday — Delhi": "pulse.host@eventwithease.com",
-  "Thane Indie Night 2026": "pulse.host@eventwithease.com",
-  "Visakhapatnam Beach Run 2026": "pulse.host@eventwithease.com",
-  "Lucknow Ghazal Evening 2026": "pulse.host@eventwithease.com",
+  // Priya Menon
+  "Mumbai Audio & Light Expo 2025": "demo.organiser@eventwithease.com",
+  "Kolkata Winter Street Food Fest 2025": "demo.organiser@eventwithease.com",
+  "Hack Night 2026": "demo.organiser@eventwithease.com",
+  "Cloud Native Day — Virtual": "demo.organiser@eventwithease.com",
+  "FinTech Compliance Masterclass": "demo.organiser@eventwithease.com",
+  "Navi Mumbai SaaS Circle 2026": "demo.organiser@eventwithease.com",
+  "Bengaluru Writers Salon 2025": "demo.organiser@eventwithease.com",
 
-  "Founder Sprint Summit": "grid.host@eventwithease.com",
-  "Goa Beach Startup Brunch 2025": "grid.host@eventwithease.com",
-  "Ahmedabad Startup Grind 2026": "grid.host@eventwithease.com",
-  "Women in Tech Career Fair 2026": "grid.host@eventwithease.com",
-  "FinTech Compliance Masterclass": "grid.host@eventwithease.com",
-  "Bengaluru Product Leadership Summit 2025": "grid.host@eventwithease.com",
-  "Surat Startup Stories 2026": "grid.host@eventwithease.com",
-  "Ranchi Creator Lab 2026": "grid.host@eventwithease.com",
+  // Rahul Iyer
+  "Delhi Marathon Expo 2025": "rahul.iyer@eventwithease.com",
+  "Bengaluru Product Leadership Summit 2025": "rahul.iyer@eventwithease.com",
+  "City Beats Live": "rahul.iyer@eventwithease.com",
+  "Thane Indie Night 2026": "rahul.iyer@eventwithease.com",
+  "Street Art Walk & Auction — Mumbai": "rahul.iyer@eventwithease.com",
+  "Lucknow Ghazal Evening 2026": "rahul.iyer@eventwithease.com",
+  "Mumbai Comedy Store Night 2025": "rahul.iyer@eventwithease.com",
 
-  "Gurgaon Boardgames & Beers 2026": "luma.host@eventwithease.com",
-  "Mysuru Heritage Walk & Talk 2026": "luma.host@eventwithease.com",
-  "Indore Photography Walk 2026": "luma.host@eventwithease.com",
+  // Simran Khanna
+  "Hyderabad AI Builders Night 2025": "simran.khanna@eventwithease.com",
+  "Founder Sprint Summit": "simran.khanna@eventwithease.com",
+  "Women in Tech Career Fair 2026": "simran.khanna@eventwithease.com",
+  "Ranchi Creator Lab 2026": "simran.khanna@eventwithease.com",
+  "Open Source Saturday — Delhi": "simran.khanna@eventwithease.com",
+  "Hyderabad Design Critique 2025": "simran.khanna@eventwithease.com",
+
+  // Vikram Choudhury
+  "Pune Design Weekender 2025": "vikram.choudhury@eventwithease.com",
+  "Design Jam Workshop": "vikram.choudhury@eventwithease.com",
+  "Pune Coffee Championships 2026": "vikram.choudhury@eventwithease.com",
+  "Indore Photography Walk 2026": "vikram.choudhury@eventwithease.com",
+  "Kolkata Indie Book Fair 2025": "vikram.choudhury@eventwithease.com",
+
+  // Meera Patel
+  "Chennai Indie Film Showcase 2025": "meera.patel@eventwithease.com",
+  "Monsoon Jazz & Coffee — Kochi": "meera.patel@eventwithease.com",
+  "Chennai Marathon 2026 — Race Day": "meera.patel@eventwithease.com",
+  "Mysuru Heritage Walk & Talk 2026": "meera.patel@eventwithease.com",
+  "North East Folk & Electronic — Shillong (stream)": "meera.patel@eventwithease.com",
+  "Kochi Sunsets Acoustic 2025": "meera.patel@eventwithease.com",
+
+  // Arjun Natesan
+  "Goa Beach Startup Brunch 2025": "arjun.natesan@eventwithease.com",
+  "Ahmedabad Startup Grind 2026": "arjun.natesan@eventwithease.com",
+  "Gurgaon Boardgames & Beers 2026": "arjun.natesan@eventwithease.com",
+  "Visakhapatnam Beach Run 2026": "arjun.natesan@eventwithease.com",
+  "Surat Startup Stories 2026": "arjun.natesan@eventwithease.com",
+  "Jaipur Photo Walk 2025": "arjun.natesan@eventwithease.com",
 };

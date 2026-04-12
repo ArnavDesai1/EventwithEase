@@ -239,7 +239,10 @@ async function seedDemoEvents() {
   console.log(`Reviews inserted: ${insertedReviews}`);
   console.log(`Feedback inserted: ${insertedFeedback}`);
   console.log(`Bookings + tickets inserted: ${insertedBookings}`);
-  console.log(`Organiser login: ${demoOrganiser.email} / ${demoOrganiser.password}`);
+  console.log(`Primary organiser (Priya): ${demoOrganiser.email} / ${demoOrganiser.password}`);
+  for (const h of extraDemoHosts) {
+    console.log(`Host (${h.name}): ${h.email} / ${h.password}`);
+  }
   console.log(`Attendee login: ${demoAttendee.email} / ${demoAttendee.password}`);
   console.log(`Crowd users (reviews/bookings): password demo1234 for all crowd.*@eventwithease.com`);
 }
