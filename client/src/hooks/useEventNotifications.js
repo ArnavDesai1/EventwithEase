@@ -48,7 +48,17 @@ export function formatMsAsCountdown(ms) {
   return `${sec}s`;
 }
 
-export function useEventNotifications({ user, myTickets, events, wishlist, followingList = [] }) {
+const RESOLVED_NOTIF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function useEventNotifications({
+  user,
+  myTickets,
+  events,
+  wishlist,
+  followingList = [],
+  attendeeRefunds = [],
+  hostRefunds = [],
+}) {
   const [inbox, setInbox] = useState(() => loadJson(INBOX_KEY, []));
   const firedRef = useRef(new Set(loadJson(FIRED_KEY, [])));
 
@@ -86,6 +96,19 @@ export function useEventNotifications({ user, myTickets, events, wishlist, follo
     const run = () => {
       const now = Date.now();
       const seenEventIds = new Set();
+
+      for (const t of myTickets) {
+        if (t.status === "expired") {
+          const ev = mergedEventForTicket(t, events);
+          const eid = String(ev?._id || t.eventId?._id || t.eventId || "");
+          fire(`texp:${t._id}`, {
+            id: `texp:${t._id}`,
+            title: "Ticket expired",
+            body: `${ev?.title || "Your event"} has ended — this pass is no longer valid for entry.`,
+            link: eid ? `/event/${eid}` : "/",
+          });
+        }
+      }
 
       for (const t of myTickets) {
         const ev = mergedEventForTicket(t, events);
@@ -217,6 +240,66 @@ export function useEventNotifications({ user, myTickets, events, wishlist, follo
     const id = setInterval(run, 30000);
     return () => clearInterval(id);
   }, [user, myTickets, events, wishlist, followingList, fire]);
+
+  useEffect(() => {
+    if (!user) return;
+    for (const r of attendeeRefunds) {
+      const id = String(r._id);
+      const title = r.eventId?.title || "Your booking";
+      if (r.status === "pending") {
+        const fee = r.cancellationFeeAmount ?? "—";
+        const net = r.refundNetAmount ?? "—";
+        const when = r.autoApproveAt ? new Date(r.autoApproveAt).toLocaleString() : "soon";
+        fire(`arefp:${id}`, {
+          id: `arefp:${id}`,
+          title: "Refund in progress",
+          body: `${title}: fee ${fee}, net ${net}. Auto-approve by ${when}.`,
+          link: "/",
+        });
+      }
+      if (r.status === "approved" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
+        fire(`arefa:${id}`, {
+          id: `arefa:${id}`,
+          title: "Refund approved",
+          body: `${title}: net ${r.refundNetAmount ?? ""} marked settled.`,
+          link: "/",
+        });
+      }
+      if (r.status === "rejected" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
+        fire(`arefr:${id}`, {
+          id: `arefr:${id}`,
+          title: "Refund update",
+          body: `${title}: request was not approved — check email or support.`,
+          link: "/",
+        });
+      }
+    }
+  }, [user, attendeeRefunds, fire]);
+
+  useEffect(() => {
+    if (!user) return;
+    for (const r of hostRefunds) {
+      const id = String(r._id);
+      const title = r.eventId?.title || "Your event";
+      const who = r.attendeeId?.name || "Attendee";
+      if (r.status === "pending") {
+        fire(`hrefp:${id}`, {
+          id: `hrefp:${id}`,
+          title: "Refund request",
+          body: `${who} · ${title} · net ${r.refundNetAmount ?? "—"} after fee · auto-approves on schedule.`,
+          link: "/",
+        });
+      }
+      if (r.status === "approved" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
+        fire(`hrefa:${id}`, {
+          id: `hrefa:${id}`,
+          title: "Refund finalized",
+          body: `${title}: ${who} — net ${r.refundNetAmount ?? ""} left your payout balance.`,
+          link: "/",
+        });
+      }
+    }
+  }, [user, hostRefunds, fire]);
 
   const unreadCount = useMemo(() => inbox.filter((x) => !x.read).length, [inbox]);
 

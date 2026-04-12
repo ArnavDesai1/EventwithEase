@@ -150,8 +150,10 @@ router.get("/:id/dashboard", requireAuth, requireRole("organiser", "admin"), asy
     const approvedRefunds = refunds.filter((refund) => refund.status === "approved");
     const pendingRefunds = refunds.filter((refund) => refund.status === "pending");
     const refundedAmount = approvedRefunds.reduce((sum, refund) => {
+      const net = Number(refund.refundNetAmount);
+      if (Number.isFinite(net) && net >= 0) return sum + net;
       const booking = bookings.find((item) => String(item._id) === String(refund.bookingId));
-      return sum + (booking?.totalAmount || 0);
+      return sum + (Number(booking?.refundedAmount) || booking?.totalAmount || 0);
     }, 0);
     const payoutEstimate = Math.max(0, revenue - refundedAmount);
 

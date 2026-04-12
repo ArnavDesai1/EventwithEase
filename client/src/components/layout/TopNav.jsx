@@ -99,7 +99,9 @@ export default function TopNav({
             {user && typeof onNotificationsToggle === "function" ? (
               <button
                 type="button"
-                className={`site-header-ghost site-notif-trigger${notificationsOpen ? " is-active" : ""}`}
+                className={`site-header-ghost site-notif-trigger${notificationsOpen ? " is-active" : ""}${
+                  notificationUnread > 0 ? " has-unread" : ""
+                }`}
                 aria-label={`Notifications${notificationUnread > 0 ? `, ${notificationUnread} unread` : ""}`}
                 onClick={wrapNav(onNotificationsToggle)}
               >
@@ -134,7 +136,9 @@ export default function TopNav({
           {user && typeof onNotificationsToggle === "function" ? (
             <button
               type="button"
-              className={`site-header-ghost site-notif-trigger${notificationsOpen ? " is-active" : ""}`}
+              className={`site-header-ghost site-notif-trigger${notificationsOpen ? " is-active" : ""}${
+                notificationUnread > 0 ? " has-unread" : ""
+              }`}
               aria-label={`Notifications${notificationUnread > 0 ? `, ${notificationUnread} unread` : ""}`}
               onClick={onNotificationsToggle}
             >

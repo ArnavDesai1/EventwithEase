@@ -1093,6 +1093,10 @@ textarea {
   color: var(--teal);
 }
 
+.ticket-status.is-expired {
+  color: #c9a227;
+}
+
 .ticket-card svg {
   border-radius: 12px;
   padding: 10px;
@@ -2447,6 +2451,25 @@ textarea {
   color: var(--amber);
 }
 
+.site-notif-trigger.has-unread:not(.is-active) {
+  border-color: rgba(232, 168, 87, 0.55);
+  color: var(--amber);
+  animation: ewe-bell-glow 1.4s ease-in-out infinite alternate;
+}
+
+.site-notif-trigger.has-unread:not(.is-active) .site-notif-bell::before {
+  filter: drop-shadow(0 0 6px rgba(232, 168, 87, 0.75));
+}
+
+@keyframes ewe-bell-glow {
+  from {
+    box-shadow: 0 0 0 1px rgba(232, 168, 87, 0.15), 0 0 10px rgba(232, 168, 87, 0.18);
+  }
+  to {
+    box-shadow: 0 0 0 1px rgba(232, 168, 87, 0.45), 0 0 22px rgba(232, 168, 87, 0.42);
+  }
+}
+
 .site-notif-bell::before {
   content: "";
   display: block;
@@ -2683,6 +2706,19 @@ textarea {
 .ticket-cancel-hint {
   margin: 0 0 10px;
   font-size: 0.8rem;
+}
+
+.ticket-cancel-hint--warn {
+  color: #ffb4bf;
+}
+
+.refund-row-meta {
+  margin-top: 6px;
+}
+
+.attendee-status.is-expired {
+  color: #c9a227;
+  text-transform: lowercase;
 }
 
 .notif-list {

@@ -8,6 +8,12 @@ const refundSchema = new mongoose.Schema(
     reason: { type: String, default: "" },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
     resolvedAt: { type: Date },
+    /** Gross booking total at time of cancel (snapshot). */
+    bookingTotalAmount: { type: Number, min: 0 },
+    cancellationFeeAmount: { type: Number, default: 0, min: 0 },
+    refundNetAmount: { type: Number, min: 0 },
+    policyBand: { type: String, default: "" },
+    autoApproveAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

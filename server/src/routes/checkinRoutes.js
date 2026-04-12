@@ -34,6 +34,10 @@ router.post("/", requireAuth, requireRole("organiser", "admin"), async (req, res
       return res.status(400).json({ message: "This ticket was refunded and cannot be checked in.", ticket });
     }
 
+    if (ticket.status === "expired") {
+      return res.status(400).json({ message: "This ticket has expired (event ended).", ticket });
+    }
+
     if (ticket.status === "checked-in") {
       return res.status(400).json({ message: "This ticket has already been checked in.", ticket });
     }

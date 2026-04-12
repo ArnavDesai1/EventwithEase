@@ -5,6 +5,11 @@ import Booking from "../models/Booking.js";
 import Ticket from "../models/Ticket.js";
 import Refund from "../models/Refund.js";
 import { requireAuth } from "../middleware/auth.js";
+import {
+  AUTO_APPROVE_HOURS,
+  autoApproveAtFromNow,
+  computeCancellationAmounts,
+} from "../config/cancellationPolicy.js";
 
 const router = express.Router();
 
@@ -154,9 +159,7 @@ router.post("/:bookingId/cancel", requireAuth, async (req, res) => {
 
     const event = await Event.findById(booking.eventId);
     if (!event) return res.status(404).json({ message: "Event not found." });
-    if (new Date(event.date) <= new Date()) {
-      return res.status(400).json({ message: "Cannot cancel after the event date." });
-    }
+    const now = new Date();
 
     const tickets = await Ticket.find({ bookingId: booking._id });
     if (!tickets.length) {
@@ -170,19 +173,41 @@ router.post("/:bookingId/cancel", requireAuth, async (req, res) => {
     }
 
     if (booking.totalAmount > 0) {
+      let amounts;
+      try {
+        amounts = computeCancellationAmounts(booking.createdAt, now, booking.totalAmount, event.date);
+      } catch (e) {
+        if (e.code === "CANCEL_WINDOW_CLOSED") {
+          return res.status(400).json({ message: e.message });
+        }
+        throw e;
+      }
+
+      const autoApproveAt = autoApproveAtFromNow(now);
       const refund = await Refund.create({
         eventId: booking.eventId,
         bookingId: booking._id,
         attendeeId: req.user._id,
         reason: req.body.reason || "Booking cancelled by attendee.",
         status: "pending",
+        bookingTotalAmount: booking.totalAmount,
+        cancellationFeeAmount: amounts.fee,
+        refundNetAmount: amounts.net,
+        policyBand: amounts.policyBand,
+        autoApproveAt,
       });
       booking.refundStatus = "pending";
       await booking.save();
       return res.json({
         kind: "refund_requested",
         refund,
-        message: "Cancellation recorded. The organiser will process your refund.",
+        message: `Cancellation recorded. A ${amounts.fee} fee applies (${amounts.policyBand === "grace" ? "grace window" : "standard"} tier). Net refund ${amounts.net} is scheduled to auto-approve after ${AUTO_APPROVE_HOURS} hours unless disputed by support.`,
+        summary: {
+          cancellationFee: amounts.fee,
+          refundNet: amounts.net,
+          policyBand: amounts.policyBand,
+          autoApproveAt,
+        },
       });
     }
 

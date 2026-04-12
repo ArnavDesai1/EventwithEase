@@ -10,7 +10,7 @@ const ticketSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     status: {
       type: String,
-      enum: ["booked", "checked-in", "refunded"],
+      enum: ["booked", "checked-in", "refunded", "expired"],
       default: "booked",
     },
     checkedInAt: { type: Date, default: null },

@@ -36,6 +36,9 @@ const emptyEventForm = {
 
 const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
 
+/** Matches server `EWE_CANCEL_DEADLINE_HOURS` (hours before start that cancel stays open). */
+const CANCEL_DEADLINE_HOURS_BEFORE = 10;
+
 /** Populated `{ _id, name }` or raw ObjectId string from older responses. */
 function eventOrganiserRefId(event) {
   const o = event?.organiserId;
@@ -106,8 +109,8 @@ function NotificationsPanel({
           </div>
         </div>
         <p className="notif-panel-hint">
-          Milestone alerts (this week, 24h, 1h, etc.) fire while this tab is open. Your ticket list below always shows countdowns. Followed
-          hosts trigger alerts when they add new upcoming events.
+          Milestone alerts (this week, 24h, 1h, etc.) fire while this tab is open. Refunds, ticket expiry after events, and host refund
+          summaries also land here. Followed hosts alert when they add new upcoming events.
         </p>
 
         {ticketPreview.length > 0 ? (
@@ -126,7 +129,7 @@ function NotificationsPanel({
                           Starts {fmtDate(row.startsAt)} · <em>{fmtCountdown(row.leftMs)}</em> from now
                         </span>
                         <span className="notif-preview-sub notif-preview-muted">
-                          You can request to cancel a booking until the event time (paid tickets may go through a refund review).
+                          Paid cancellations: tiered fee (minimal if within 5h of booking), auto-approved ~24h, until 10h before doors.
                         </span>
                       </>
                     )}
@@ -226,6 +229,7 @@ export default function App() {
   const [paymentMessage, setPaymentMessage] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [refunds, setRefunds] = useState([]);
+  const [hostRefunds, setHostRefunds] = useState([]);
   const [refundRequests, setRefundRequests] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [feedbackEntries, setFeedbackEntries] = useState([]);
@@ -266,7 +270,15 @@ export default function App() {
     requestDesktopPermission,
     desktopSupported,
     desktopPermission,
-  } = useEventNotifications({ user, myTickets, events, wishlist, followingList: followingHosts });
+  } = useEventNotifications({
+    user,
+    myTickets,
+    events,
+    wishlist,
+    followingList: followingHosts,
+    attendeeRefunds: refunds,
+    hostRefunds,
+  });
 
   useEffect(() => {
     const id = setInterval(() => setCountdownNow(Date.now()), 1000);
@@ -409,7 +421,7 @@ export default function App() {
 
   const refundsByBooking = useMemo(() => {
     return refunds.reduce((acc, refund) => {
-      acc[refund.bookingId] = refund;
+      acc[String(refund.bookingId)] = refund;
       return acc;
     }, {});
   }, [refunds]);
@@ -550,7 +562,7 @@ export default function App() {
         try {
           const response = await api.get("/auth/me");
           setUser(response.data.user);
-          await Promise.all([loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
+          await Promise.all([loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds(), mergeWishlistAfterLogin()]);
         } catch {
           localStorage.removeItem("eventwithease-token");
           setUser(null);
@@ -615,7 +627,7 @@ export default function App() {
             discountCode: parsed.discountCode,
           });
           localStorage.removeItem("eventwithease-pending-payment");
-          await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds()]);
+          await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds()]);
           flash("Stripe payment confirmed. Tickets generated.");
         } catch (error) {
           flash(error.response?.data?.message || "Stripe payment confirmed but tickets could not be created.", true);
@@ -638,7 +650,7 @@ export default function App() {
       const response = await api.post("/auth/verify-email", { token: verifyToken });
       localStorage.setItem("eventwithease-token", response.data.token);
       setUser(response.data.user);
-      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds(), mergeWishlistAfterLogin()]);
       flash(response.data.message || "Email verified.");
     } catch (error) {
       flash(error.response?.data?.message || "Unable to verify email.", true);
@@ -672,6 +684,30 @@ export default function App() {
       setRefunds([]);
     }
   }
+
+  const loadHostRefunds = useCallback(async () => {
+    if (!user) {
+      setHostRefunds([]);
+      return;
+    }
+    const roles = user.roles?.length ? user.roles : user.role ? [user.role] : [];
+    if (!roles.includes("organiser") && !roles.includes("admin")) {
+      setHostRefunds([]);
+      return;
+    }
+    try {
+      const { data } = await api.get("/refunds/my-events");
+      setHostRefunds(Array.isArray(data) ? data : []);
+    } catch {
+      setHostRefunds([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadHostRefunds();
+    const id = setInterval(loadHostRefunds, 60_000);
+    return () => clearInterval(id);
+  }, [loadHostRefunds]);
 
   async function loadReviews(eventId) {
     try {
@@ -786,7 +822,7 @@ export default function App() {
       localStorage.setItem("eventwithease-token", response.data.token);
       setUser(response.data.user);
       setAuthForm(emptyAuthForm);
-      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds(), mergeWishlistAfterLogin()]);
       flash(authMode === "login" ? "Welcome back." : "Account created.");
     } catch (error) {
       flash(error.response?.data?.message || "Authentication failed.", true);
@@ -802,7 +838,7 @@ export default function App() {
       });
       localStorage.setItem("eventwithease-token", googleResponse.data.token);
       setUser(googleResponse.data.user);
-      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds(), mergeWishlistAfterLogin()]);
       flash("Signed in with Google.");
     } catch (error) {
       flash(error.response?.data?.message || "Google sign-in failed.", true);
@@ -1140,20 +1176,9 @@ export default function App() {
         setRefunds((current) => [response.data.refund, ...current]);
       }
       flash(response.data.message || "Booking updated.");
-      await Promise.all([loadMyTickets(), loadRefunds()]);
+      await Promise.all([loadMyTickets(), loadRefunds(), loadHostRefunds()]);
     } catch (error) {
       flash(error.response?.data?.message || "Unable to cancel booking.", true);
-    }
-  }
-
-  async function resolveRefund(refundId, status) {
-    try {
-      const response = await api.post(`/refunds/${refundId}/resolve`, { status });
-      setRefundRequests((current) => current.map((item) => (item._id === refundId ? response.data.refund : item)));
-      flash(`Refund ${status}.`);
-      if (dashboard?.event?._id) await openDashboard(dashboard.event._id);
-    } catch (error) {
-      flash(error.response?.data?.message || "Unable to resolve refund.", true);
     }
   }
 
@@ -1207,6 +1232,7 @@ export default function App() {
       } catch {
         setRefundRequests([]);
       }
+      await loadHostRefunds();
       try {
         const feedbackResponse = await api.get(`/feedback/event/${id}`);
         setFeedbackEntries(feedbackResponse.data);
@@ -2926,12 +2952,25 @@ export default function App() {
                 const eventNotStarted = eventDateVal && new Date(eventDateVal) > new Date();
                 const startMs = eventDateVal ? new Date(eventDateVal).getTime() : NaN;
                 const untilStart = Number.isFinite(startMs) ? Math.max(0, startMs - countdownNow) : null;
+                const bid = String(ticket.bookingId);
+                const minMsBeforeStart = CANCEL_DEADLINE_HOURS_BEFORE * 3600000;
+                const insideCancelWindow = untilStart != null && untilStart >= minMsBeforeStart;
                 const canCancelBooking =
                   isLeadTicket &&
                   eventNotStarted &&
                   ticket.status === "booked" &&
-                  !refundsByBooking[ticket.bookingId] &&
-                  !evMerged?.cancelledAt;
+                  !refundsByBooking[bid] &&
+                  !evMerged?.cancelledAt &&
+                  insideCancelWindow;
+                const showCancelClosed =
+                  isLeadTicket &&
+                  eventNotStarted &&
+                  ticket.status === "booked" &&
+                  !refundsByBooking[bid] &&
+                  !evMerged?.cancelledAt &&
+                  !insideCancelWindow &&
+                  untilStart != null &&
+                  untilStart < minMsBeforeStart;
 
                 return (
                 <article className="ticket-card" key={ticket._id} style={{ animationDelay: `${index * 0.08}s` }}>
@@ -2946,18 +2985,28 @@ export default function App() {
                     ) : null}
                     {canCancelBooking ? (
                       <p className="auth-note ticket-cancel-hint">
-                        Cancellation: you can cancel this booking until the event time. Paid tickets may require organiser approval for a
-                        refund.
+                        Cancellation: until <strong>{CANCEL_DEADLINE_HOURS_BEFORE}h</strong> before start. Within <strong>5h</strong> of
+                        booking = minimal fee; after that a higher fee applies. Paid refunds <strong>auto-approve ~24h</strong> after you
+                        cancel.
+                      </p>
+                    ) : null}
+                    {showCancelClosed ? (
+                      <p className="auth-note ticket-cancel-hint ticket-cancel-hint--warn">
+                        Cancellation is closed (inside {CANCEL_DEADLINE_HOURS_BEFORE}h of start).
                       </p>
                     ) : null}
                     <div className="meta-list ticket-meta-list">
                       <span className="ticket-code">{ticket.ticketCode}</span>
-                      <span className={`ticket-status ${ticket.status === "checked-in" ? "is-checked-in" : ""}`}>
-                        {ticket.status === "checked-in" ? "Checked in" : ticket.status}
+                      <span
+                        className={`ticket-status ${
+                          ticket.status === "checked-in" ? "is-checked-in" : ticket.status === "expired" ? "is-expired" : ""
+                        }`}
+                      >
+                        {ticket.status === "checked-in" ? "Checked in" : ticket.status === "expired" ? "Expired" : ticket.status}
                       </span>
-                      {refundsByBooking[ticket.bookingId] && (
-                        <span className={`ticket-status ${refundsByBooking[ticket.bookingId].status === "approved" ? "is-checked-in" : ""}`}>
-                          Refund {refundsByBooking[ticket.bookingId].status}
+                      {refundsByBooking[bid] && (
+                        <span className={`ticket-status ${refundsByBooking[bid].status === "approved" ? "is-checked-in" : ""}`}>
+                          Refund {refundsByBooking[bid].status}
                         </span>
                       )}
                     </div>
@@ -3141,7 +3190,13 @@ export default function App() {
                     </div>
                     <div className="stat-card">
                       <strong className="stat-card-revenue">{formatCurrency(dashboard.stats.refundedAmount || 0)}</strong>
-                      <span>Refunded</span>
+                      <span>Refunded (net)</span>
+                    </div>
+                    <div className="stat-card">
+                      <strong>
+                        <AnimatedNumber value={dashboard.stats.pendingRefunds ?? 0} />
+                      </strong>
+                      <span>Pending refunds</span>
                     </div>
                     <div className="stat-card">
                       <strong className="stat-card-revenue">{formatCurrency(dashboard.stats.payoutEstimate || 0)}</strong>
@@ -3155,8 +3210,12 @@ export default function App() {
                         <span className="attendee-email">{ticket.userId?.email}</span>
                         <span className="attendee-link">{ticket.userId?.networkingOptIn && ticket.userId?.linkedinUrl ? "LinkedIn shared" : "-"}</span>
                         <span className="ticket-code">{ticket.ticketCode}</span>
-                        <span className={`attendee-status ${ticket.status === "checked-in" ? "is-checked-in" : ""}`}>
-                          {ticket.status}
+                        <span
+                          className={`attendee-status ${
+                            ticket.status === "checked-in" ? "is-checked-in" : ticket.status === "expired" ? "is-expired" : ""
+                          }`}
+                        >
+                          {ticket.status === "expired" ? "expired" : ticket.status}
                         </span>
                       </div>
                     ))}
@@ -3170,27 +3229,39 @@ export default function App() {
             <section className={panelClass("panel", ["organiser", "checkin"])}>
               <div className="section-head">
                 <h2>Refund requests</h2>
+                <p className="section-note">
+                  View-only summary. Paid cancellations use tiered fees and <strong>auto-approve ~24h</strong> after the attendee submits;
+                  you will see counts above and bell alerts for new and finalized refunds.
+                </p>
               </div>
               {refundRequests.length ? (
                 <div className="stack-list">
                   {refundRequests.map((refund) => (
-                    <div key={refund._id} className="refund-row">
+                    <div key={refund._id} className="refund-row refund-row--detail">
                       <div>
                         <strong>{refund.attendeeId?.name || "Attendee"}</strong>
                         <p className="auth-note">{refund.reason || "No reason shared"}</p>
+                        <p className="auth-note refund-row-meta">
+                          {[
+                            refund.policyBand === "grace"
+                              ? "Grace fee tier"
+                              : refund.policyBand === "standard"
+                                ? "Standard fee tier"
+                                : "",
+                            refund.bookingTotalAmount != null ? `Booking ${formatCurrency(refund.bookingTotalAmount)}` : "",
+                            refund.cancellationFeeAmount != null ? `Fee ${formatCurrency(refund.cancellationFeeAmount)}` : "",
+                            refund.refundNetAmount != null ? `Net refund ${formatCurrency(refund.refundNetAmount)}` : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        {refund.status === "pending" && refund.autoApproveAt ? (
+                          <p className="auth-note">Auto-approve by {formatDate(refund.autoApproveAt)}</p>
+                        ) : null}
+                        {refund.resolvedAt ? <p className="auth-note">Resolved {formatDate(refund.resolvedAt)}</p> : null}
                       </div>
                       <div className="refund-actions">
                         <span className="pill">{refund.status}</span>
-                        {refund.status === "pending" && (
-                          <>
-                            <button className="ghost-button" type="button" onClick={() => resolveRefund(refund._id, "approved")}>
-                              Approve
-                            </button>
-                            <button className="ghost-button" type="button" onClick={() => resolveRefund(refund._id, "rejected")}>
-                              Reject
-                            </button>
-                          </>
-                        )}
                       </div>
                     </div>
                   ))}

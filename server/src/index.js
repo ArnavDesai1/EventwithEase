@@ -13,6 +13,7 @@ import checkinRoutes from "./routes/checkinRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import organiserRoutes from "./routes/organiserRoutes.js";
 import { startFeedbackInviteScheduler } from "./jobs/feedbackInvites.js";
+import { startRefundAndTicketLifecycleScheduler } from "./jobs/refundAndTicketLifecycle.js";
 
 dotenv.config();
 
@@ -50,6 +51,7 @@ connectDatabase()
     app.listen(port, "0.0.0.0", () => {
       console.log(`EventwithEase API running on http://0.0.0.0:${port}`);
       startFeedbackInviteScheduler();
+      startRefundAndTicketLifecycleScheduler();
     });
   })
   .catch((error) => {
