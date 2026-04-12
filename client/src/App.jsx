@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import api from "./api";
+import { formatCurrency, formatDate, effectiveTicketPrice } from "./utils/format.js";
+import PrimaryButton from "./components/ui/PrimaryButton.jsx";
+import EmptyState from "./components/ui/EmptyState.jsx";
+import LoadingSpinner from "./components/ui/LoadingSpinner.jsx";
+import AnimatedNumber from "./components/ui/AnimatedNumber.jsx";
+import TopNav from "./components/layout/TopNav.jsx";
+import SiteFooter from "./components/layout/SiteFooter.jsx";
 import "./App.css";
 
 const emptyEventForm = {
@@ -26,108 +33,17 @@ const emptyEventForm = {
 
 const emptyAuthForm = { name: "", email: "", password: "", role: "attendee" };
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value || 0);
-}
-
-function formatDate(value) {
-  return new Date(value).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function effectiveTicketPrice(ticket) {
-  if (!ticket) return 0;
-  const basePrice = Number(ticket.price) || 0;
-  const rawEarlyBird = ticket.earlyBirdPrice;
-  const hasEarlyBirdPrice = rawEarlyBird !== undefined && rawEarlyBird !== null && `${rawEarlyBird}`.trim() !== "";
-  const earlyBirdPrice = Number(rawEarlyBird);
-  const earlyBirdEndsAt = ticket.earlyBirdEndsAt ? new Date(ticket.earlyBirdEndsAt) : null;
-  const isEarlyBirdActive = hasEarlyBirdPrice && earlyBirdEndsAt && earlyBirdEndsAt > new Date();
-
-  if (isEarlyBirdActive && Number.isFinite(earlyBirdPrice)) {
-    return Math.max(0, earlyBirdPrice);
-  }
-
-  return basePrice;
-}
-
-function AnimatedNumber({ value }) {
-  const [display, setDisplay] = useState(0);
-  const prev = useRef(0);
-
-  useEffect(() => {
-    const target = Number(value) || 0;
-    const start = prev.current;
-    prev.current = target;
-    if (start === target) return;
-
-    const diff = target - start;
-    const duration = 700;
-    const startTime = performance.now();
-
-    function step(now) {
-      const t = Math.min((now - startTime) / duration, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
-      setDisplay(Math.round(start + diff * ease));
-      if (t < 1) requestAnimationFrame(step);
-    }
-
-    requestAnimationFrame(step);
-  }, [value]);
-
-  return <>{display}</>;
-}
-
-function PrimaryButton({ children, onClick, type = "button", style }) {
-  const ref = useRef(null);
-
-  function handleClick(event) {
-    const button = ref.current;
-    if (!button) return;
-
-    const rect = button.getBoundingClientRect();
-    button.style.setProperty("--x", `${((event.clientX - rect.left) / rect.width) * 100}%`);
-    button.style.setProperty("--y", `${((event.clientY - rect.top) / rect.height) * 100}%`);
-    onClick?.(event);
-  }
-
-  return (
-    <button ref={ref} className="primary-button" type={type} onClick={handleClick} style={style}>
-      {children}
-    </button>
-  );
-}
-
-function EmptyState({ label }) {
-  return (
-    <div className="empty-state">
-      <span className="empty-state-mark">O</span>
-      {label}
-    </div>
-  );
-}
-
-function LoadingSpinner() {
-  return <div className="loading-spinner" />;
-}
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState(emptyAuthForm);
   const [eventForm, setEventForm] = useState(emptyEventForm);
   const [events, setEvents] = useState([]);
+  const [eventsError, setEventsError] = useState(null);
+  const [eventsReloading, setEventsReloading] = useState(false);
   const [myEvents, setMyEvents] = useState([]);
   const [myTickets, setMyTickets] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [selectedTicketTypeId, setSelectedTicketTypeId] = useState("");
-  const [ticketQuantity, setTicketQuantity] = useState(1);
   const [ticketCart, setTicketCart] = useState({});
   const [discountCode, setDiscountCode] = useState("");
   const [dashboard, setDashboard] = useState(null);
@@ -336,13 +252,15 @@ export default function App() {
 
     try {
       if (token) {
-        const response = await api.get("/auth/me");
-        setUser(response.data.user);
-        await Promise.all([loadMyTickets(), loadMyEvents(), loadRefunds()]);
+        try {
+          const response = await api.get("/auth/me");
+          setUser(response.data.user);
+          await Promise.all([loadMyTickets(), loadMyEvents(), loadRefunds()]);
+        } catch {
+          localStorage.removeItem("eventwithease-token");
+          setUser(null);
+        }
       }
-      await loadEvents();
-    } catch {
-      localStorage.removeItem("eventwithease-token");
       await loadEvents();
     } finally {
       setLoading(false);
@@ -350,8 +268,30 @@ export default function App() {
   }
 
   async function loadEvents() {
-    const response = await api.get("/events");
-    setEvents(response.data);
+    setEventsError(null);
+    try {
+      const response = await api.get("/events");
+      setEvents(response.data);
+      return true;
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "We could not reach the server. Check your connection and API URL.";
+      setEventsError(message);
+      setEvents([]);
+      return false;
+    }
+  }
+
+  async function retryLoadEvents() {
+    setEventsReloading(true);
+    try {
+      const ok = await loadEvents();
+      if (ok) flash("Events refreshed.");
+    } finally {
+      setEventsReloading(false);
+    }
   }
 
 
@@ -587,7 +527,6 @@ export default function App() {
     try {
       const response = await api.get(`/events/${id}`);
       setSelectedEvent(response.data);
-      setSelectedTicketTypeId(response.data.ticketTypes[0]?._id || "");
       setTicketCart(Object.fromEntries(response.data.ticketTypes.map((ticket, index) => [ticket._id, index === 0 ? 1 : 0])));
       setReviewForm({ rating: 5, comment: "" });
       setFeedbackForm({ rating: 5, feedback: "" });
@@ -1084,6 +1023,60 @@ export default function App() {
     flash("Logged out.");
   }
 
+  function scrollToRef(ref) {
+    requestAnimationFrame(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function goDiscover() {
+    setProfileMode("attendee");
+    scrollToRef(browseRef);
+  }
+
+  function goBook() {
+    setProfileMode("attendee");
+    scrollToRef(detailsRef);
+  }
+
+  function goTickets() {
+    setProfileMode("attendee");
+    scrollToRef(ticketsRef);
+  }
+
+  function goOrganise() {
+    if (!user) {
+      setProfileMode("attendee");
+      flash("Sign in with an organiser account to create and manage events.", true);
+      scrollToRef(authRef);
+      return;
+    }
+    if (!isOrganiser) {
+      flash("This account cannot publish events. Use an organiser profile.", true);
+      scrollToRef(authRef);
+      return;
+    }
+    setProfileMode("organiser");
+    scrollToRef(organiserRef);
+  }
+
+  function goCheckIn() {
+    if (!user) {
+      flash("Sign in to use the check-in panel.", true);
+      scrollToRef(authRef);
+      return;
+    }
+    if (!isOrganiser) {
+      flash("Check-in is available to event hosts.", true);
+      scrollToRef(authRef);
+      return;
+    }
+    setProfileMode("checkin");
+    scrollToRef(checkinRef);
+  }
+
+  function openAccount() {
+    scrollToRef(authRef);
+  }
+
   if (loading) {
     return (
       <div className="screen-center">
@@ -1096,11 +1089,28 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="hero-panel">
+    <div className="app-root">
+      <a className="skip-link" href="#ewe-main">
+        Skip to workspace
+      </a>
+      <TopNav
+        user={user}
+        isOrganiser={isOrganiser}
+        profileMode={profileMode}
+        onGoDiscover={goDiscover}
+        onGoBook={goBook}
+        onGoTickets={goTickets}
+        onGoOrganise={goOrganise}
+        onGoCheckIn={goCheckIn}
+        onOpenAccount={openAccount}
+        onLogout={logout}
+      />
+      <div className="app-flow">
+        <div className="app-shell">
+          <header className="hero-panel">
         <div className="hero-copy-block">
           <p className="eyebrow">EventwithEase</p>
-          <p className="hero-kicker">Event publishing - Ticketing - Check-in</p>
+          <p className="hero-kicker">Event publishing · Ticketing · Check-in</p>
           <h1>
             <span>Make your next</span>
             <span className="hero-accent">event feel bigger</span>
@@ -1110,10 +1120,19 @@ export default function App() {
             Organisers launch events, sell ticket types, and track turnout live. Attendees browse, book, carry a QR
             pass, and walk in with a single scan.
           </p>
+          <div className="hero-cta-row">
+            <PrimaryButton type="button" onClick={goDiscover}>
+              Browse events
+            </PrimaryButton>
+            <button type="button" className="hero-cta-secondary" onClick={goOrganise}>
+              Host an event
+            </button>
+          </div>
+          <p className="hero-trust">Sandbox payments · Per-ticket QR · CSV export · Refund workflow</p>
           <div className="hero-strip">
             {[
-              { mode: "organiser", label: "Organiser", sub: "Create events - Monitor revenue" },
-              { mode: "attendee", label: "Attendee", sub: "Book tickets - Carry QR entry" },
+              { mode: "organiser", label: "Organiser", sub: "Create events · Monitor revenue" },
+              { mode: "attendee", label: "Attendee", sub: "Book tickets · QR entry" },
               { mode: "checkin", label: "Check-in", sub: "Mark attendance in seconds" },
             ].map(({ mode, label, sub }) => (
               <button
@@ -1148,8 +1167,12 @@ export default function App() {
       {statusMessage && <div className="banner success">{statusMessage}</div>}
       {errorMessage && <div className="banner error">{errorMessage}</div>}
 
-      <main className="grid-layout">
-        <section className={panelClass("panel auth-panel full-width", ["organiser", "checkin"])} ref={authRef}>
+      <main id="ewe-main" className="grid-layout">
+        <section
+          id="ewe-account"
+          className={panelClass("panel auth-panel full-width", ["organiser", "checkin"])}
+          ref={authRef}
+        >
           <div className="section-head auth-head">
             <h2>
               {user
@@ -1312,7 +1335,7 @@ export default function App() {
         </section>
 
         {profileMode === "attendee" && recommendedEvents.length > 0 && (
-        <section className={panelClass("panel span-two full-width", ["attendee"])}>
+        <section id="ewe-recommended" className={panelClass("panel span-two full-width", ["attendee"])}>
           <div className="section-head">
             <h2>Recommended for you</h2>
             <p className="section-note">Based on your past tickets and saved events.</p>
@@ -1353,7 +1376,7 @@ export default function App() {
         )}
 
 {profileMode === "attendee" && (
-        <section className={panelClass("panel span-two full-width", ["attendee"])} ref={browseRef}>
+        <section id="ewe-discover" className={panelClass("panel span-two full-width", ["attendee"])} ref={browseRef}>
           <div className="section-head event-browser-head">
             <h2>Browse events</h2>
             <div className="filter-bar">
@@ -1392,9 +1415,28 @@ export default function App() {
             </div>
           </div>
 
-          {filteredEvents.length === 0 ? (
-            <EmptyState label="No events found" />
-          ) : (
+          {eventsError ? (
+            <div className="api-error-banner" role="alert">
+              <div className="api-error-copy">
+                <strong>We could not load events</strong>
+                <p>{eventsError}</p>
+                <p className="api-error-hint">
+                  Confirm <code className="api-error-code">VITE_API_URL</code> on Vercel matches your live API (for
+                  example <code className="api-error-code">/api</code> at the end).
+                </p>
+              </div>
+              <button type="button" className="api-error-retry" onClick={retryLoadEvents} disabled={eventsReloading}>
+                {eventsReloading ? "Retrying…" : "Try again"}
+              </button>
+            </div>
+          ) : null}
+
+          {!eventsError && filteredEvents.length === 0 ? (
+            <EmptyState
+              label="No events match these filters"
+              hint="Try clearing search, city, or date filters to see more listings."
+            />
+          ) : eventsError ? null : (
             <div className="card-grid">
               {filteredEvents.map((event, index) => (
                 <article className="event-card" key={event._id} style={{ animationDelay: `${index * 0.07}s` }}>
@@ -1433,7 +1475,7 @@ export default function App() {
         )}
 
         {profileMode === "attendee" && (
-        <section className={panelClass("panel", ["attendee"])} ref={detailsRef}>
+        <section id="ewe-book" className={panelClass("panel", ["attendee"])} ref={detailsRef}>
           <div className="section-head">
             <h2>Book tickets</h2>
           </div>
@@ -1604,6 +1646,8 @@ export default function App() {
                       className="ticket-quantity-input"
                       type="number"
                       min="0"
+                      inputMode="numeric"
+                      aria-label={`Quantity for ${ticket.name}`}
                       value={ticketCart[ticket._id] || 0}
                       onChange={(e) => updateTicketCart(ticket._id, e.target.value)}
                     />
@@ -1651,7 +1695,7 @@ export default function App() {
         )}
 
         {user && profileMode === "organiser" && (
-          <section className={panelClass("panel span-two", ["organiser"])} ref={organiserRef}>
+          <section id="ewe-organise" className={panelClass("panel span-two", ["organiser"])} ref={organiserRef}>
             <div className="section-head">
               <h2>Create event</h2>
             </div>
@@ -1889,7 +1933,7 @@ export default function App() {
         )}
 
         {profileMode === "attendee" && (
-        <section className={panelClass("panel", ["attendee"])} ref={ticketsRef}>
+        <section id="ewe-tickets" className={panelClass("panel", ["attendee"])} ref={ticketsRef}>
           <div className="section-head">
             <h2>Your QR tickets</h2>
           </div>
@@ -1934,7 +1978,7 @@ export default function App() {
         )}
 
         {profileMode === "attendee" && wishlistReminders.length > 0 && (
-          <section className={panelClass("panel full-width", ["attendee"])}>
+          <section id="ewe-reminders" className={panelClass("panel full-width", ["attendee"])}>
             <div className="section-head">
               <h2>Upcoming reminders</h2>
               <p className="section-note">Wishlisted events starting in the next 72 hours (in-app + email when SMTP is configured).</p>
@@ -1989,7 +2033,11 @@ export default function App() {
               )}
             </section>
 
-            <section className={panelClass("panel span-two full-width", ["checkin", "organiser"])} ref={checkinRef}>
+            <section
+              id="ewe-checkin"
+              className={panelClass("panel span-two full-width", ["checkin", "organiser"])}
+              ref={checkinRef}
+            >
               <div className="section-head">
                 <h2>Check-in dashboard</h2>
                 {dashboard && (
@@ -2108,6 +2156,9 @@ export default function App() {
           </>
         )}
       </main>
+        </div>
+        <SiteFooter />
+      </div>
     </div>
   );
 }

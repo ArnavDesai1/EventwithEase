@@ -1,3 +1,12 @@
 #root {
   min-height: 100vh;
 }
+
+:focus-visible {
+  outline: 2px solid rgba(232, 168, 87, 0.85);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
