@@ -180,6 +180,11 @@ export default function App() {
     return new Date(selectedEvent.date) < new Date();
   }, [selectedEvent]);
 
+  const wishlistedEvents = useMemo(
+    () => events.filter((event) => wishlist.includes(event._id)),
+    [events, wishlist]
+  );
+
   const recommendedEvents = useMemo(() => {
     if (!events.length) return [];
 
@@ -209,11 +214,6 @@ export default function App() {
       return acc;
     }, {});
   }, [refunds]);
-
-  const wishlistedEvents = useMemo(
-    () => events.filter((event) => wishlist.includes(event._id)),
-    [events, wishlist]
-  );
 
   useEffect(() => {
     localStorage.setItem("eventwithease-wishlist", JSON.stringify(wishlist));
