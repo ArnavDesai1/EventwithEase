@@ -1,73 +1,66 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
-const READER_ID = "ewe-html5-qrcode-reader";
-
 /**
- * Live QR scanner for ticket codes (expects payload like EWE-XXXXXXXX in the QR).
- * Keeps the reader div mounted while the parent panel is mounted so stop/cleanup stays reliable.
+ * Live QR scanner for ticket codes (payload like EWE-XXXXXXXX).
+ * Mount only while the camera should run. Uses a unique element id so React Strict Mode
+ * remounts do not collide with html5-qrcode's internal state.
  */
-export default function QrScannerPanel({ active, onScan, onCameraError }) {
-  const instanceRef = useRef(null);
+export default function QrScannerPanel({ onScan, onCameraError }) {
+  const onScanRef = useRef(onScan);
+  const onCameraErrorRef = useRef(onCameraError);
+  const readerId = `ewe-html5-${useId().replace(/:/g, "")}`;
 
   useEffect(() => {
-    if (!active) {
-      const inst = instanceRef.current;
-      instanceRef.current = null;
-      if (inst) {
-        inst
-          .stop()
-          .then(() => inst.clear())
-          .catch(() => {});
-      }
-      return;
+    onScanRef.current = onScan;
+    onCameraErrorRef.current = onCameraError;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const host = document.getElementById(readerId);
+    if (!host) {
+      onCameraErrorRef.current?.("Scanner container not found. Try again.");
+      return undefined;
     }
 
-    const html5 = new Html5Qrcode(READER_ID, { verbose: false });
-    instanceRef.current = html5;
-
+    const inst = new Html5Qrcode(readerId, { verbose: false });
     const qrbox = Math.min(260, typeof window !== "undefined" ? window.innerWidth - 48 : 260);
 
-    html5
+    inst
       .start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: qrbox, height: qrbox } },
         (decodedText) => {
           const match = String(decodedText).match(/EWE-[A-F0-9]{8}/i);
           const code = match ? match[0].toUpperCase() : String(decodedText).trim();
-          if (code) onScan(code);
+          if (code) onScanRef.current?.(code);
         },
         () => {}
       )
       .catch((err) => {
-        onCameraError?.(err?.message || "Camera unavailable.");
-        const inst = instanceRef.current;
-        instanceRef.current = null;
-        if (inst) {
-          inst.stop().catch(() => {});
+        if (!cancelled) {
+          onCameraErrorRef.current?.(err?.message || "Camera unavailable.");
         }
       });
 
     return () => {
-      const inst = instanceRef.current;
-      instanceRef.current = null;
-      if (inst) {
-        inst
-          .stop()
-          .then(() => inst.clear())
-          .catch(() => {});
-      }
+      cancelled = true;
+      inst
+        .stop()
+        .then(() => inst.clear())
+        .catch(() => {});
     };
-  }, [active, onScan, onCameraError]);
+  }, [readerId]);
 
   return (
     <div
-      id={READER_ID}
+      id={readerId}
       className="qr-scanner-viewport"
       style={{
-        display: active ? "block" : "none",
         width: "100%",
-        minHeight: active ? 280 : 0,
+        minHeight: 280,
+        marginTop: 12,
       }}
     />
   );

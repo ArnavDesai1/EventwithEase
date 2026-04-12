@@ -533,6 +533,23 @@ export default function App() {
     }, 5000);
   }
 
+  const qrScanUiRef = useRef({});
+  qrScanUiRef.current = { flash, setCheckInNotice, setCheckInCode, setScannerOpen };
+
+  const onQrDecoded = useCallback((code) => {
+    const { flash: f, setCheckInNotice: sn, setCheckInCode: sc, setScannerOpen: so } = qrScanUiRef.current;
+    sn(null);
+    sc(code);
+    so(false);
+    f("Ticket code captured from QR.");
+  }, []);
+
+  const onQrCameraError = useCallback((msg) => {
+    const { flash: f, setScannerOpen: so } = qrScanUiRef.current;
+    f(msg || "Camera unavailable.", true);
+    so(false);
+  }, []);
+
   async function mergeWishlistAfterLogin() {
     try {
       const raw = JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]");
@@ -1261,8 +1278,19 @@ export default function App() {
       checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    if (!userRoles.includes("admin") && !dashboard?.event?._id) {
+      const msg = "Select your event under Managed events first — check-in applies to that gate only.";
+      setCheckInNotice({ ok: false, text: msg });
+      flash(msg, true);
+      checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     try {
-      const response = await api.post("/checkin", { ticketCode: code });
+      const body = { ticketCode: code };
+      if (dashboard?.event?._id) {
+        body.eventId = dashboard.event._id;
+      }
+      const response = await api.post("/checkin", body);
       const name = response.data.ticket?.userId?.name || "Attendee";
       const msg = `${name} checked in successfully.`;
       setCheckInNotice({ ok: true, text: msg });
@@ -1271,7 +1299,13 @@ export default function App() {
       if (dashboard?.event?._id) await openDashboard(dashboard.event._id);
       checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (error) {
-      const msg = error.response?.data?.message || error.message || "Unable to check in ticket.";
+      const data = error.response?.data;
+      const msg =
+        data?.message ||
+        (error.response?.status === 409
+          ? "This ticket was already scanned — each QR works once."
+          : error.message) ||
+        "Unable to check in ticket.";
       setCheckInNotice({ ok: false, text: msg });
       flash(msg, true);
       checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3123,6 +3157,11 @@ export default function App() {
             >
               <div className="section-head">
                 <h2>Check-in dashboard</h2>
+                <p className="section-note">
+                  You (the signed-in host or door volunteer on the host account) scan each attendee&apos;s QR or paste their code. The
+                  server records one successful scan per ticket — a second scan is rejected. Pick the live event under{" "}
+                  <strong>Managed events</strong> so codes cannot be checked against the wrong gate.
+                </p>
                 {dashboard && (
                   <button className="ghost-button" type="button" onClick={downloadDashboardCsv}>
                     Download CSV
@@ -3155,19 +3194,7 @@ export default function App() {
                   {scannerOpen ? "Stop camera" : "Scan QR with camera"}
                 </button>
               </div>
-              <QrScannerPanel
-                active={scannerOpen}
-                onScan={(code) => {
-                  setCheckInNotice(null);
-                  setCheckInCode(code);
-                  setScannerOpen(false);
-                  flash("Ticket code captured from QR.");
-                }}
-                onCameraError={(msg) => {
-                  flash(msg || "Camera unavailable.", true);
-                  setScannerOpen(false);
-                }}
-              />
+              {scannerOpen ? <QrScannerPanel onScan={onQrDecoded} onCameraError={onQrCameraError} /> : null}
 
               {dashboard ? (
                 <div className="dashboard">
