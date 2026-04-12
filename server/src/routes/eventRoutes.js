@@ -9,7 +9,7 @@ const router = express.Router();
 
 router.get("/", async (req, res) => {
   try {
-    const { search = "", category = "" } = req.query;
+    const { search = "", category = "", city = "" } = req.query;
     const query = {};
 
     if (search) {
@@ -18,6 +18,10 @@ router.get("/", async (req, res) => {
 
     if (category) {
       query.category = category;
+    }
+
+    if (city) {
+      query.city = { $regex: city, $options: "i" };
     }
 
     const events = await Event.find(query).populate("organiserId", "name email").sort({ date: 1 });
@@ -75,7 +79,7 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", requireAuth, requireRole("organiser", "admin"), async (req, res) => {
   try {
-    const { title, description, location, category, date, coverImage, ticketTypes, discountCodes = [], agenda = [], speakers = [], faq = [], venueMapUrl = "", venueType = "physical" } = req.body;
+    const { title, description, location, city = "", category, date, coverImage, ticketTypes, discountCodes = [], agenda = [], speakers = [], faq = [], venueMapUrl = "", venueType = "physical" } = req.body;
 
     if (!title || !description || !location || !date || !Array.isArray(ticketTypes) || !ticketTypes.length) {
       return res.status(400).json({ message: "Missing required event fields." });
@@ -85,6 +89,7 @@ router.post("/", requireAuth, requireRole("organiser", "admin"), async (req, res
       title,
       description,
       location,
+      city: String(city || "").trim(),
       category,
       date,
       coverImage,

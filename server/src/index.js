@@ -10,6 +10,7 @@ import reviewRoutes from "./routes/reviewRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import checkinRoutes from "./routes/checkinRoutes.js";
+import { startFeedbackInviteScheduler } from "./jobs/feedbackInvites.js";
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ connectDatabase()
   .then(() => {
     app.listen(port, "0.0.0.0", () => {
       console.log(`EventwithEase API running on http://0.0.0.0:${port}`);
+      startFeedbackInviteScheduler();
     });
   })
   .catch((error) => {

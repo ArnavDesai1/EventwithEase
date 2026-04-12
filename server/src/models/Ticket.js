@@ -14,6 +14,7 @@ const ticketSchema = new mongoose.Schema(
       default: "booked",
     },
     checkedInAt: { type: Date, default: null },
+    feedbackInviteSentAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

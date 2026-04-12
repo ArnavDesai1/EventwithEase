@@ -41,6 +41,7 @@ const demoEvents = [
     description:
       "A late-night build sprint for students, founders, and makers with live mentors, mini challenges, and a final demo showcase.",
     location: "Bangalore International Centre, Bengaluru",
+    city: "Bengaluru",
     venueType: "physical",
     category: "Tech",
     date: "2026-05-01T18:30:00.000Z",
@@ -63,6 +64,7 @@ const demoEvents = [
     description:
       "An open-air indie music evening with food stalls, creator booths, and a high-energy headline set under the city lights.",
     location: "Jio World Garden, Mumbai",
+    city: "Mumbai",
     venueType: "physical",
     category: "Music",
     date: "2026-05-10T19:00:00.000Z",
@@ -85,6 +87,7 @@ const demoEvents = [
     description:
       "A focused business summit covering pitch practice, fundraising basics, growth experiments, and founder networking.",
     location: "T-Hub, Hyderabad",
+    city: "Hyderabad",
     venueType: "physical",
     category: "Business",
     date: "2026-05-18T10:00:00.000Z",
@@ -100,6 +103,7 @@ const demoEvents = [
     description:
       "A hands-on workshop where participants design a landing page, test it with users, and leave with a polished case-study draft.",
     location: "The Hive, Pune",
+    city: "Pune",
     venueType: "physical",
     category: "Workshop",
     date: "2026-05-24T14:00:00.000Z",

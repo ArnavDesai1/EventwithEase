@@ -7,6 +7,7 @@ const emptyEventForm = {
   title: "",
   description: "",
   location: "",
+  city: "",
   venueType: "physical",
   category: "Tech",
   date: "",
@@ -38,6 +39,22 @@ function formatDate(value) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function effectiveTicketPrice(ticket) {
+  if (!ticket) return 0;
+  const basePrice = Number(ticket.price) || 0;
+  const rawEarlyBird = ticket.earlyBirdPrice;
+  const hasEarlyBirdPrice = rawEarlyBird !== undefined && rawEarlyBird !== null && `${rawEarlyBird}`.trim() !== "";
+  const earlyBirdPrice = Number(rawEarlyBird);
+  const earlyBirdEndsAt = ticket.earlyBirdEndsAt ? new Date(ticket.earlyBirdEndsAt) : null;
+  const isEarlyBirdActive = hasEarlyBirdPrice && earlyBirdEndsAt && earlyBirdEndsAt > new Date();
+
+  if (isEarlyBirdActive && Number.isFinite(earlyBirdPrice)) {
+    return Math.max(0, earlyBirdPrice);
+  }
+
+  return basePrice;
 }
 
 function AnimatedNumber({ value }) {
@@ -119,6 +136,8 @@ export default function App() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [priceFilter, setPriceFilter] = useState("all");
+  const [cityFilter, setCityFilter] = useState("");
+  const [descriptionOutline, setDescriptionOutline] = useState("");
   const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]"));
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -149,9 +168,10 @@ export default function App() {
   const isOrganiser = userRoles.includes("organiser") || userRoles.includes("admin");
 
   const filteredEvents = useMemo(() => {
+    const cityNeedle = cityFilter.trim().toLowerCase();
     return events.filter((event) => {
-      const eventText = `${event.title} ${event.category} ${event.location}`.toLowerCase();
-      const lowestPrice = Math.min(...event.ticketTypes.map((ticket) => Number(ticket.price || 0)));
+      const eventText = `${event.title} ${event.category} ${event.location} ${event.city || ""}`.toLowerCase();
+      const lowestPrice = Math.min(...event.ticketTypes.map((ticket) => effectiveTicketPrice(ticket)));
       const eventDate = new Date(event.date);
       const today = new Date();
       const nextWeek = new Date();
@@ -161,15 +181,19 @@ export default function App() {
 
       const matchesSearch = !search.trim() || eventText.includes(search.toLowerCase());
       const matchesCategory = categoryFilter === "all" || event.category === categoryFilter;
+      const matchesCity =
+        !cityNeedle ||
+        (event.city || "").toLowerCase().includes(cityNeedle) ||
+        (event.location || "").toLowerCase().includes(cityNeedle);
       const matchesPrice = priceFilter === "all" || (priceFilter === "free" ? lowestPrice === 0 : lowestPrice > 0);
       const matchesDate =
         dateFilter === "all" ||
-        (dateFilter === "week" && eventDate <= nextWeek) ||
-        (dateFilter === "month" && eventDate <= nextMonth);
+        (dateFilter === "week" && eventDate <= nextWeek && eventDate >= today) ||
+        (dateFilter === "month" && eventDate <= nextMonth && eventDate >= today);
 
-      return matchesSearch && matchesCategory && matchesPrice && matchesDate;
+      return matchesSearch && matchesCategory && matchesCity && matchesPrice && matchesDate;
     });
-  }, [categoryFilter, dateFilter, events, priceFilter, search]);
+  }, [categoryFilter, cityFilter, dateFilter, events, priceFilter, search]);
 
   const hasSelectedBooking = useMemo(() => {
     if (!selectedEvent) return false;
@@ -185,6 +209,15 @@ export default function App() {
     () => events.filter((event) => wishlist.includes(event._id)),
     [events, wishlist]
   );
+
+  const wishlistReminders = useMemo(() => {
+    const now = Date.now();
+    const horizon = now + 72 * 60 * 60 * 1000;
+    return wishlistedEvents.filter((event) => {
+      const t = new Date(event.date).getTime();
+      return t > now && t <= horizon;
+    });
+  }, [wishlistedEvents]);
 
   const recommendedEvents = useMemo(() => {
     if (!events.length) return [];
@@ -595,19 +628,7 @@ export default function App() {
   }
 
   function getTicketEffectivePrice(ticket) {
-    if (!ticket) return 0;
-    const basePrice = Number(ticket.price) || 0;
-    const rawEarlyBird = ticket.earlyBirdPrice;
-    const hasEarlyBirdPrice = rawEarlyBird !== undefined && rawEarlyBird !== null && `${rawEarlyBird}`.trim() !== "";
-    const earlyBirdPrice = Number(rawEarlyBird);
-    const earlyBirdEndsAt = ticket.earlyBirdEndsAt ? new Date(ticket.earlyBirdEndsAt) : null;
-    const isEarlyBirdActive = hasEarlyBirdPrice && earlyBirdEndsAt && earlyBirdEndsAt > new Date();
-
-    if (isEarlyBirdActive && Number.isFinite(earlyBirdPrice)) {
-      return Math.max(0, earlyBirdPrice);
-    }
-
-    return basePrice;
+    return effectiveTicketPrice(ticket);
   }
 
   function checkoutSubtotal() {
@@ -674,7 +695,15 @@ export default function App() {
         return;
       }
 
-      setPaymentMessage(response.data.message || "Stripe sandbox simulated.");
+      setPaymentMessage(
+        `${response.data.message || "Stripe sandbox simulated."}${
+          response.data.summary
+            ? ` — Order: ${(response.data.summary.lineItems || [])
+                .map((line) => `${line.quantity}× ${line.name}`)
+                .join(", ")}. Total ${formatCurrency(response.data.summary.total)}.`
+            : ""
+        }`
+      );
       await handleBookTickets(new Event("submit"));
     } catch (error) {
       setPaymentMessage(error.response?.data?.message || "Unable to start Stripe checkout.");
@@ -700,7 +729,15 @@ export default function App() {
         items,
         discountCode: discountCode.trim() || undefined,
       });
-      setPaymentMessage(response.data.message || "Razorpay sandbox simulated.");
+      setPaymentMessage(
+        `${response.data.message || "Razorpay sandbox simulated."}${
+          response.data.summary
+            ? ` — Order: ${(response.data.summary.lineItems || [])
+                .map((line) => `${line.quantity}× ${line.name}`)
+                .join(", ")}. Total ${formatCurrency(response.data.summary.total)}.`
+            : ""
+        }`
+      );
       await handleBookTickets(new Event("submit"));
     } catch (error) {
       setPaymentMessage(error.response?.data?.message || "Unable to start Razorpay checkout.");
@@ -933,6 +970,23 @@ export default function App() {
       (a, b) => (slotOrder[a.preferredSlot] ?? 3) - (slotOrder[b.preferredSlot] ?? 3)
     );
 
+    for (let i = 1; i < sorted.length; i += 1) {
+      const prevSpeaker = (sorted[i - 1].speaker || "").trim().toLowerCase();
+      const currSpeaker = (sorted[i].speaker || "").trim().toLowerCase();
+      if (!currSpeaker || currSpeaker !== prevSpeaker) continue;
+
+      const swapIndex = sorted.findIndex(
+        (session, index) =>
+          index > i && (session.speaker || "").trim().toLowerCase() !== currSpeaker
+      );
+
+      if (swapIndex > -1) {
+        const temp = sorted[i];
+        sorted[i] = sorted[swapIndex];
+        sorted[swapIndex] = temp;
+      }
+    }
+
     const start = eventForm.date ? new Date(eventForm.date) : new Date();
     let cursor = new Date(start);
 
@@ -942,7 +996,7 @@ export default function App() {
       const endTime = new Date(cursor.getTime() + duration * 60000);
       cursor = endTime;
 
-      const label = `${formatTimeShort(startTime)} - ${formatTimeShort(endTime)} ? ${session.title}`;
+      const label = `${formatTimeShort(startTime)} – ${formatTimeShort(endTime)} · ${session.title}`;
       return session.speaker ? `${label} (${session.speaker})` : label;
     });
 
@@ -987,10 +1041,19 @@ export default function App() {
     const title = eventForm.title || "this event";
     const category = eventForm.category || "community";
     const location = eventForm.location || "a memorable venue";
+    const city = eventForm.city ? `${eventForm.city} — ` : "";
+    const bullets = descriptionOutline
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const highlights = bullets.length
+      ? `Highlights include ${bullets.slice(0, 4).join("; ")}${bullets.length > 4 ? "; and more" : ""}.`
+      : "Highlights will be announced closer to the date.";
 
     updateEventField(
       "description",
-      `${title} brings together ${category.toLowerCase()} enthusiasts for a focused, high-energy experience at ${location}. Expect a smooth check-in flow, useful sessions, and ticket options including ${ticketNames}. Whether attendees are joining to learn, network, or celebrate, this event is designed to feel polished from booking to entry.`
+      `${title} brings together ${category.toLowerCase()} enthusiasts for a focused, high-energy experience at ${city}${location}. ${highlights} Expect a smooth check-in flow, thoughtful programming, and ticket options including ${ticketNames}. Whether attendees are joining to learn, network, or celebrate, this event is designed to feel polished from booking to entry.`
     );
   }
 
@@ -1271,10 +1334,11 @@ export default function App() {
                   <p className="card-label">Recommended</p>
                   <h3>{event.title}</h3>
                   <p>{event.description}</p>
-                  <div className="meta-list">
-                    <span>{formatDate(event.date)}</span>
-                    <span>{event.location}</span>
-                  </div>
+                    <div className="meta-list">
+                      <span>{formatDate(event.date)}</span>
+                      {event.city ? <span>{event.city}</span> : null}
+                      <span>{event.location}</span>
+                    </div>
                   <div className="event-actions">
                     <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
                     <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
@@ -1314,6 +1378,12 @@ export default function App() {
                 <option value="week">Next 7 days</option>
                 <option value="month">Next month</option>
               </select>
+              <input
+                className="search-input"
+                placeholder="City"
+                value={cityFilter}
+                onChange={(e) => setCityFilter(e.target.value)}
+              />
               <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)}>
                 <option value="all">Any price</option>
                 <option value="free">Free</option>
@@ -1344,6 +1414,7 @@ export default function App() {
                     <p>{event.description}</p>
                     <div className="meta-list">
                       <span>{formatDate(event.date)}</span>
+                      {event.city ? <span>{event.city}</span> : null}
                       <span>{event.location}</span>
                       <span>by {event.organiserId?.name || "Organiser"}</span>
                     </div>
@@ -1384,6 +1455,7 @@ export default function App() {
               <p>{selectedEvent.description}</p>
               <div className="meta-list">
                 <span>{formatDate(selectedEvent.date)}</span>
+                {selectedEvent.city ? <span>{selectedEvent.city}</span> : null}
                 <span>{selectedEvent.location}</span>
               </div>
               <div className="details-grid">
@@ -1433,7 +1505,10 @@ export default function App() {
                       <ul>
                         {networkingList.map((person) => (
                           <li key={person._id}>
-                            {person.name} ? <a className="map-link" href={person.linkedinUrl} target="_blank" rel="noreferrer">LinkedIn</a>
+                            {person.name}{" "}
+                            <a className="map-link" href={person.linkedinUrl} target="_blank" rel="noreferrer">
+                              LinkedIn
+                            </a>
                           </li>
                         ))}
                       </ul>
@@ -1462,7 +1537,10 @@ export default function App() {
                       <div key={review._id} className="review-card">
                         <div className="review-meta">
                           <strong>{review.attendeeId?.name || "Attendee"}</strong>
-                          <span>{"?".repeat(review.rating)}{"?".repeat(5 - review.rating)}</span>
+                          <span aria-label={`${review.rating} out of 5`}>
+                            {"★".repeat(review.rating)}
+                            {"☆".repeat(5 - review.rating)}
+                          </span>
                         </div>
                         <p>{review.comment || "(no comment)"}</p>
                       </div>
@@ -1584,12 +1662,13 @@ export default function App() {
               </div>
               <div className="two-column">
                 <input placeholder="Location" value={eventForm.location} onChange={(e) => updateEventField("location", e.target.value)} />
+                <input placeholder="City (for filters)" value={eventForm.city} onChange={(e) => updateEventField("city", e.target.value)} />
+              </div>
+              <div className="two-column">
                 <select value={eventForm.venueType} onChange={(e) => updateEventField("venueType", e.target.value)}>
                   <option value="physical">Physical venue</option>
                   <option value="online">Online event</option>
                 </select>
-              </div>
-              <div className="two-column">
                 <select value={eventForm.category} onChange={(e) => updateEventField("category", e.target.value)}>
                   <option value="Tech">Tech</option>
                   <option value="Music">Music</option>
@@ -1610,8 +1689,14 @@ export default function App() {
                 value={eventForm.venueMapUrl}
                 onChange={(e) => updateEventField("venueMapUrl", e.target.value)}
               />
+              <textarea
+                rows="3"
+                placeholder="Bullet points for the AI-style description (one per line)"
+                value={descriptionOutline}
+                onChange={(e) => setDescriptionOutline(e.target.value)}
+              />
               <button type="button" className="ghost-button" onClick={generateDescriptionDraft}>
-                Generate AI-style description
+                Generate AI-style description from bullets
               </button>
 
               <textarea
@@ -1848,6 +1933,23 @@ export default function App() {
         </section>
         )}
 
+        {profileMode === "attendee" && wishlistReminders.length > 0 && (
+          <section className={panelClass("panel full-width", ["attendee"])}>
+            <div className="section-head">
+              <h2>Upcoming reminders</h2>
+              <p className="section-note">Wishlisted events starting in the next 72 hours (in-app + email when SMTP is configured).</p>
+            </div>
+            <div className="stack-list">
+              {wishlistReminders.map((event) => (
+                <button key={event._id} className="list-button" type="button" onClick={() => handleSelectEvent(event._id)}>
+                  <span>{event.title}</span>
+                  <small>{formatDate(event.date)}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {profileMode === "attendee" && (
         <section className={panelClass("panel", ["attendee"])}>
           <div className="section-head">
@@ -1946,6 +2048,8 @@ export default function App() {
               ) : (
                 <EmptyState label="Select one of your managed events to see live stats" />
               )}
+            </section>
+
             <section className={panelClass("panel", ["organiser", "checkin"])}>
               <div className="section-head">
                 <h2>Refund requests</h2>
@@ -2000,8 +2104,6 @@ export default function App() {
               ) : (
                 <EmptyState label="No feedback yet" />
               )}
-            </section>
-
             </section>
           </>
         )}
