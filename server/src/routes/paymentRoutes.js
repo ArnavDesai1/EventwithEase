@@ -2,6 +2,7 @@ import express from "express";
 import Stripe from "stripe";
 import Event from "../models/Event.js";
 import { requireAuth } from "../middleware/auth.js";
+import { paymentCheckoutLimiter } from "../middleware/rateLimits.js";
 
 const router = express.Router();
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -55,7 +56,7 @@ function computeCheckout(event, items, discountCode) {
   return { subtotal, discountAmount, total, lineItems, discountCode: appliedDiscount?.code || "" };
 }
 
-router.post("/stripe/checkout", requireAuth, async (req, res) => {
+router.post("/stripe/checkout", requireAuth, paymentCheckoutLimiter, async (req, res) => {
   try {
     const { eventId, items = [], discountCode = "" } = req.body;
     const event = await Event.findById(eventId);
@@ -82,6 +83,16 @@ router.post("/stripe/checkout", requireAuth, async (req, res) => {
       });
     }
 
+    const clientBase = process.env.CLIENT_URL || "http://localhost:5173";
+    const cartMeta = JSON.stringify(
+      normalizedItems.map((item) => [String(item.ticketTypeId), item.quantity])
+    );
+    if (cartMeta.length > 450) {
+      return res.status(400).json({
+        message: "Cart is too large for secure Stripe metadata. Split into separate bookings.",
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
@@ -93,12 +104,13 @@ router.post("/stripe/checkout", requireAuth, async (req, res) => {
         },
         quantity: item.quantity,
       })),
-      success_url: `${process.env.CLIENT_URL || "http://localhost:5173"}?stripeSuccess=1&eventId=${eventId}`,
-      cancel_url: `${process.env.CLIENT_URL || "http://localhost:5173"}?stripeCancel=1&eventId=${eventId}`,
+      success_url: `${clientBase}?stripeSuccess=1&session_id={CHECKOUT_SESSION_ID}&eventId=${eventId}`,
+      cancel_url: `${clientBase}?stripeCancel=1&eventId=${eventId}`,
       metadata: {
-        eventId,
-        discountCode: summary.discountCode,
+        eventId: String(eventId),
+        discountCode: summary.discountCode || "",
         userId: String(req.user._id),
+        cart: cartMeta,
       },
     });
 
@@ -108,7 +120,7 @@ router.post("/stripe/checkout", requireAuth, async (req, res) => {
   }
 });
 
-router.post("/razorpay/order", requireAuth, async (req, res) => {
+router.post("/razorpay/order", requireAuth, paymentCheckoutLimiter, async (req, res) => {
   try {
     const { eventId, items = [], discountCode = "" } = req.body;
     const event = await Event.findById(eventId);

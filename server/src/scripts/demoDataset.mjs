@@ -12,10 +12,10 @@ export const demoOrganiser = {
   hostTagline: "Producer · conferences & product summits · Bengaluru",
   hostBio:
     "Priya programmes flagship conferences and leadership summits across India—tight run-of-show, sponsor-ready layouts, and attendee journeys that feel calm from doors to close.",
-  linkedinUrl: "https://linkedin.com/in/example-priya-menon",
-  twitterUrl: "https://x.com",
-  instagramUrl: "https://instagram.com",
-  websiteUrl: "https://eventwithease.com",
+  linkedinUrl: "https://linkedin.com/in/priya-menon-events",
+  twitterUrl: "https://x.com/priyamenon_events",
+  instagramUrl: "https://instagram.com/priyamenon.events",
+  websiteUrl: "https://priyamenon.events.example",
 };
 
 export const demoAttendee = {
@@ -301,7 +301,7 @@ export const demoEvents = [
     date: "2026-05-01T18:30:00.000Z",
     coverImage: u("photo-1517048676732-d65bc937f952"),
     agenda: ["18:30 - Doors open", "19:00 - Kickoff keynote", "20:30 - Demo showcase"],
-    speakers: ["Priya Menon", "Guest Mentor"],
+    speakers: ["Simran Khanna", "Guest Mentor"],
     faq: [{ question: "Is food included?", answer: "Light snacks and coffee are provided." }],
     venueMapUrl: "https://maps.google.com/?q=Bangalore+International+Centre",
     discountCodes: [{ code: "HACK10", type: "percent", value: 10, expiresAt: "2026-04-30" }],
@@ -693,10 +693,10 @@ export const extraDemoHosts = [
     hostTagline: "Live culture · music, comedy & night experiences · Mumbai",
     hostBio:
       "Rahul curates live rooms and open-air culture nights—tight line-ups, fair artist splits, and audiences who actually show up on time.",
-    linkedinUrl: "https://linkedin.com/in/example-rahul-iyer",
-    twitterUrl: "https://x.com",
-    instagramUrl: "https://instagram.com",
-    websiteUrl: "https://eventwithease.com",
+    linkedinUrl: "https://linkedin.com/in/rahuliyer-live",
+    twitterUrl: "https://x.com/rahuliyer_liveshows",
+    instagramUrl: "https://instagram.com/rahuliyer.nights",
+    websiteUrl: "https://citybeats.rahuliyer.example",
   },
   {
     name: "Simran Khanna",
@@ -707,10 +707,10 @@ export const extraDemoHosts = [
     hostTagline: "Tech & design communities · Hyderabad & remote",
     hostBio:
       "Simran runs builder nights, OSS days, and critique-first design meetups—fewer slides, more shipping and honest feedback.",
-    linkedinUrl: "https://linkedin.com/in/example-simran-khanna",
-    twitterUrl: "https://x.com",
-    instagramUrl: "https://instagram.com",
-    websiteUrl: "https://eventwithease.com",
+    linkedinUrl: "https://linkedin.com/in/simrankhanna-dev",
+    twitterUrl: "https://x.com/simran_builds",
+    instagramUrl: "https://instagram.com/simran.community",
+    websiteUrl: "https://simrankhanna.tech.example",
   },
   {
     name: "Vikram Choudhury",
@@ -721,10 +721,10 @@ export const extraDemoHosts = [
     hostTagline: "Design weeks, indie publishing & creative weekends",
     hostBio:
       "Vikram programmes multi-day design and arts weekends with small cohorts, clear schedules, and space for real portfolio work.",
-    linkedinUrl: "https://linkedin.com/in/example-vikram-choudhury",
-    twitterUrl: "https://x.com",
-    instagramUrl: "https://instagram.com",
-    websiteUrl: "https://eventwithease.com",
+    linkedinUrl: "https://linkedin.com/in/vikramchoudhury-design",
+    twitterUrl: "https://x.com/vikram_designwknd",
+    instagramUrl: "https://instagram.com/vikram.studio.weekend",
+    websiteUrl: "https://vikramdesignweek.example",
   },
   {
     name: "Meera Patel",
@@ -735,10 +735,10 @@ export const extraDemoHosts = [
     hostTagline: "South India stages · intimate music & film",
     hostBio:
       "Meera books acoustic rooms, hybrid streams, and film-forward evenings where sound quality and respectful crowds come first.",
-    linkedinUrl: "https://linkedin.com/in/example-meera-patel",
-    twitterUrl: "https://x.com",
-    instagramUrl: "https://instagram.com",
-    websiteUrl: "https://eventwithease.com",
+    linkedinUrl: "https://linkedin.com/in/meera-patel-stages",
+    twitterUrl: "https://x.com/meera_southstages",
+    instagramUrl: "https://instagram.com/meera.film.music",
+    websiteUrl: "https://meerapatel.stages.example",
   },
   {
     name: "Arjun Natesan",
@@ -749,10 +749,10 @@ export const extraDemoHosts = [
     hostTagline: "Founder circles, runs & weekend field trips",
     hostBio:
       "Arjun hosts founder brunches, angel office hours, and movement-forward weekends—always with clear agendas and on-time transitions.",
-    linkedinUrl: "https://linkedin.com/in/example-arjun-natesan",
-    twitterUrl: "https://x.com",
-    instagramUrl: "https://instagram.com",
-    websiteUrl: "https://eventwithease.com",
+    linkedinUrl: "https://linkedin.com/in/arjunnatesan-founder",
+    twitterUrl: "https://x.com/arjun_founderweekends",
+    instagramUrl: "https://instagram.com/arjun.fieldtrips",
+    websiteUrl: "https://arjunnatesan.founder.example",
   },
 ];
 
@@ -761,21 +761,20 @@ export const demoCancelledEventTitle = "Design Jam Workshop";
 export const demoCancelledEventAt = "2026-04-10T08:00:00.000Z";
 
 /**
- * Every listed event is assigned to a host so Discover shows varied names.
- * Emails: demo.organiser@ (Priya), rahul.iyer@, simran.khanna@, vikram.choudhury@, meera.patel@, arjun.natesan@
- * Titles not listed fall back to demo organiser in seed.
+ * Every demo event title → host login email (unique User per host).
+ * Trimmed titles only — seed resolves `doc.title.trim()` against this map.
+ * Spotlight May 2026 cards are split across four different hosts on purpose.
  */
 export const eventHostEmailByTitle = {
-  // Priya Menon
+  // Priya Menon (demo.organiser@)
   "Mumbai Audio & Light Expo 2025": "demo.organiser@eventwithease.com",
   "Kolkata Winter Street Food Fest 2025": "demo.organiser@eventwithease.com",
-  "Hack Night 2026": "demo.organiser@eventwithease.com",
   "Cloud Native Day — Virtual": "demo.organiser@eventwithease.com",
   "FinTech Compliance Masterclass": "demo.organiser@eventwithease.com",
   "Navi Mumbai SaaS Circle 2026": "demo.organiser@eventwithease.com",
   "Bengaluru Writers Salon 2025": "demo.organiser@eventwithease.com",
 
-  // Rahul Iyer
+  // Rahul Iyer — live culture / music
   "Delhi Marathon Expo 2025": "rahul.iyer@eventwithease.com",
   "Bengaluru Product Leadership Summit 2025": "rahul.iyer@eventwithease.com",
   "City Beats Live": "rahul.iyer@eventwithease.com",
@@ -784,22 +783,22 @@ export const eventHostEmailByTitle = {
   "Lucknow Ghazal Evening 2026": "rahul.iyer@eventwithease.com",
   "Mumbai Comedy Store Night 2025": "rahul.iyer@eventwithease.com",
 
-  // Simran Khanna
+  // Simran Khanna — tech & builders (includes Hack Night for visible variety)
   "Hyderabad AI Builders Night 2025": "simran.khanna@eventwithease.com",
-  "Founder Sprint Summit": "simran.khanna@eventwithease.com",
+  "Hack Night 2026": "simran.khanna@eventwithease.com",
   "Women in Tech Career Fair 2026": "simran.khanna@eventwithease.com",
   "Ranchi Creator Lab 2026": "simran.khanna@eventwithease.com",
   "Open Source Saturday — Delhi": "simran.khanna@eventwithease.com",
   "Hyderabad Design Critique 2025": "simran.khanna@eventwithease.com",
 
-  // Vikram Choudhury
+  // Vikram Choudhury — design & creative weekends
   "Pune Design Weekender 2025": "vikram.choudhury@eventwithease.com",
   "Design Jam Workshop": "vikram.choudhury@eventwithease.com",
   "Pune Coffee Championships 2026": "vikram.choudhury@eventwithease.com",
   "Indore Photography Walk 2026": "vikram.choudhury@eventwithease.com",
   "Kolkata Indie Book Fair 2025": "vikram.choudhury@eventwithease.com",
 
-  // Meera Patel
+  // Meera Patel — film & music stages
   "Chennai Indie Film Showcase 2025": "meera.patel@eventwithease.com",
   "Monsoon Jazz & Coffee — Kochi": "meera.patel@eventwithease.com",
   "Chennai Marathon 2026 — Race Day": "meera.patel@eventwithease.com",
@@ -807,11 +806,18 @@ export const eventHostEmailByTitle = {
   "North East Folk & Electronic — Shillong (stream)": "meera.patel@eventwithease.com",
   "Kochi Sunsets Acoustic 2025": "meera.patel@eventwithease.com",
 
-  // Arjun Natesan
+  // Arjun Natesan — founders & movement / field events
   "Goa Beach Startup Brunch 2025": "arjun.natesan@eventwithease.com",
+  "Founder Sprint Summit": "arjun.natesan@eventwithease.com",
   "Ahmedabad Startup Grind 2026": "arjun.natesan@eventwithease.com",
   "Gurgaon Boardgames & Beers 2026": "arjun.natesan@eventwithease.com",
   "Visakhapatnam Beach Run 2026": "arjun.natesan@eventwithease.com",
   "Surat Startup Stories 2026": "arjun.natesan@eventwithease.com",
   "Jaipur Photo Walk 2025": "arjun.natesan@eventwithease.com",
 };
+
+/** Resolve host email for a demo event title (handles stray whitespace in DB). */
+export function hostEmailForDemoEventTitle(title) {
+  const t = String(title || "").trim();
+  return eventHostEmailByTitle[t] || demoOrganiser.email;
+}

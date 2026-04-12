@@ -1,5 +1,6 @@
 import Booking from "../models/Booking.js";
 import Ticket from "../models/Ticket.js";
+import { notifyRefundResolved } from "./transactionalEmail.js";
 
 /**
  * @param {import("mongoose").Document} refund
@@ -25,6 +26,7 @@ export async function approveRefundDocument(refund) {
   }
 
   await Ticket.updateMany({ bookingId: refund.bookingId }, { status: "refunded" });
+  await notifyRefundResolved(refund, "approved").catch(() => {});
   return refund;
 }
 
@@ -45,5 +47,6 @@ export async function rejectRefundDocument(refund) {
     await booking.save();
   }
 
+  await notifyRefundResolved(refund, "rejected").catch(() => {});
   return refund;
 }

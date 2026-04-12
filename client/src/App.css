@@ -1025,6 +1025,83 @@ textarea {
   margin-bottom: 24px;
 }
 
+.checkin-verify-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkin-verify-toggle input {
+  accent-color: var(--teal);
+}
+
+.waitlist-cta {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.waitlist-host-block {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.waitlist-host-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.waitlist-host-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.waitlist-host-position {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--amber);
+  min-width: 2rem;
+}
+
+.waitlist-host-email {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.meta-host-tagline {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.host-tagline-detail {
+  margin-top: 6px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .ticket-stack {
   display: grid;
   gap: 14px;
@@ -1224,6 +1301,16 @@ textarea {
 .list-button small {
   color: var(--ink-3);
   font-size: 0.82rem;
+}
+
+.list-button.is-active {
+  border-color: rgba(232, 168, 87, 0.45);
+  background: var(--surface-2);
+}
+
+.list-button.is-active::after {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .dashboard {
@@ -3502,4 +3589,78 @@ body.nav-drawer-open {
   .analytics-funnel-count {
     padding-left: 0;
   }
+}
+
+.admin-console-card {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.admin-console-subhead {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+.admin-dir-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-dir-list--users {
+  max-height: 180px;
+}
+
+.admin-dir-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.staff-host-block {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.staff-invite-form {
+  margin-top: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.staff-host-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.staff-host-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }

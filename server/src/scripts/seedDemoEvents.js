@@ -20,6 +20,7 @@ import {
   bookingSeeds,
   extraDemoHosts,
   eventHostEmailByTitle,
+  hostEmailForDemoEventTitle,
   demoCancelledEventTitle,
   demoCancelledEventAt,
 } from "./demoDataset.mjs";
@@ -30,6 +31,13 @@ function ticketCode() {
 
 async function seedDemoEvents() {
   await connectDatabase();
+
+  for (const e of demoEvents) {
+    const t = e.title.trim();
+    if (!Object.prototype.hasOwnProperty.call(eventHostEmailByTitle, t)) {
+      console.warn(`[seed] Missing eventHostEmailByTitle for: "${e.title}"`);
+    }
+  }
 
   let organiser = await User.findOne({ email: demoOrganiser.email });
   if (!organiser) {
@@ -116,20 +124,34 @@ async function seedDemoEvents() {
     const exists = await Event.exists({ title: event.title });
     if (exists) continue;
 
-    const hostEmail = (eventHostEmailByTitle[event.title] || demoOrganiser.email).toLowerCase();
+    const hostEmail = hostEmailForDemoEventTitle(event.title).toLowerCase();
     const hostUser = hostByEmail.get(hostEmail) || organiser;
 
     await Event.create({ ...event, organiserId: hostUser._id });
     insertedEvents += 1;
   }
 
-  /** Re-link organiser on every run so older DBs (seeded before host mapping) get clickable hosts. */
+  /**
+   * Re-link organiser on every run: match by trimmed title so production DBs
+   * (legacy single host, stray whitespace, or renamed "Demo Organiser" users) get correct hosts.
+   */
+  const demoTitleSet = new Set(demoEvents.map((e) => e.title.trim()));
   let syncedDemoHosts = 0;
   for (const demo of demoEvents) {
-    const hostEmail = (eventHostEmailByTitle[demo.title] || demoOrganiser.email).toLowerCase();
+    const hostEmail = hostEmailForDemoEventTitle(demo.title).toLowerCase();
     const hostUser = hostByEmail.get(hostEmail) || organiser;
     const result = await Event.updateOne({ title: demo.title }, { $set: { organiserId: hostUser._id } });
     if (result.modifiedCount) syncedDemoHosts += 1;
+  }
+  const allEvents = await Event.find({}).select("title organiserId");
+  for (const doc of allEvents) {
+    const trimmed = String(doc.title || "").trim();
+    if (!demoTitleSet.has(trimmed)) continue;
+    const hostEmail = hostEmailForDemoEventTitle(trimmed).toLowerCase();
+    const hostUser = hostByEmail.get(hostEmail) || organiser;
+    if (String(doc.organiserId) === String(hostUser._id)) continue;
+    await Event.updateOne({ _id: doc._id }, { $set: { organiserId: hostUser._id } });
+    syncedDemoHosts += 1;
   }
 
   await Event.updateOne(

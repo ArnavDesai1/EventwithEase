@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import { createToken } from "../utils/token.js";
 import { hasRole, requireAuth } from "../middleware/auth.js";
 import { sendAppEmail } from "../utils/mailer.js";
+import { authLoginLimiter, authSignupLimiter } from "../middleware/rateLimits.js";
 
 const router = express.Router();
 const oneHour = 60 * 60 * 1000;
@@ -63,7 +64,7 @@ async function sendVerificationEmail(user) {
   });
 }
 
-router.post("/signup", async (req, res) => {
+router.post("/signup", authSignupLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
@@ -102,7 +103,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", authLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email: email?.toLowerCase() });

@@ -5,8 +5,12 @@ import Booking from "../models/Booking.js";
 import Refund from "../models/Refund.js";
 import Review from "../models/Review.js";
 import { hasRole, requireAuth, requireRole } from "../middleware/auth.js";
+import { notifyAttendeesEventCancelled } from "../services/transactionalEmail.js";
 
 const router = express.Router();
+
+const organiserListFields =
+  "name email hostTagline hostBio websiteUrl twitterUrl instagramUrl linkedinUrl";
 
 router.get("/", async (req, res) => {
   try {
@@ -25,7 +29,7 @@ router.get("/", async (req, res) => {
       query.city = { $regex: city, $options: "i" };
     }
 
-    const events = await Event.find(query).populate("organiserId", "name email").sort({ date: 1 });
+    const events = await Event.find(query).populate("organiserId", organiserListFields).sort({ date: 1 });
     res.json(events);
   } catch (error) {
     res.status(500).json({ message: "Unable to fetch events.", error: error.message });
@@ -34,13 +38,34 @@ router.get("/", async (req, res) => {
 
 router.get("/my-events", requireAuth, requireRole("organiser", "admin"), async (req, res) => {
   try {
-    const events = await Event.find({ organiserId: req.user._id }).sort({ date: 1 });
+    const query =
+      hasRole(req.user, "admin") && String(req.query.all || "") === "1" ? {} : { organiserId: req.user._id };
+    const events = await Event.find(query).sort({ date: 1 }).populate("organiserId", organiserListFields);
     res.json(events);
   } catch (error) {
     res.status(500).json({ message: "Unable to fetch organiser events.", error: error.message });
   }
 });
 
+/** Host (or admin) cancels their event — notifies ticket holders when transactional email is enabled. */
+router.post("/:id/cancel", requireAuth, requireRole("organiser", "admin"), async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ message: "Event not found." });
+    if (String(event.organiserId) !== String(req.user._id) && !hasRole(req.user, "admin")) {
+      return res.status(403).json({ message: "You can only cancel your own events." });
+    }
+    if (event.cancelledAt) {
+      return res.json({ message: "Event was already cancelled.", event });
+    }
+    event.cancelledAt = new Date();
+    await event.save();
+    await notifyAttendeesEventCancelled(event).catch(() => {});
+    res.json({ message: "Event cancelled.", event });
+  } catch (error) {
+    res.status(500).json({ message: "Unable to cancel event.", error: error.message });
+  }
+});
 
 router.get("/:id/networking", requireAuth, async (req, res) => {
   try {
@@ -67,7 +92,7 @@ router.get("/:id/networking", requireAuth, async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id).populate("organiserId", "name email");
+    const event = await Event.findById(req.params.id).populate("organiserId", organiserListFields);
     if (!event) {
       return res.status(404).json({ message: "Event not found." });
     }

@@ -12,6 +12,7 @@ import SiteFooter from "./components/layout/SiteFooter.jsx";
 import QrScannerPanel from "./components/QrScannerPanel.jsx";
 import EventDashboardAnalytics from "./components/EventDashboardAnalytics.jsx";
 import { useEventNotifications, formatMsAsCountdown } from "./hooks/useEventNotifications.js";
+import { ogEventUrl } from "./utils/shareUrls.js";
 import "./App.css";
 
 const emptyEventForm = {
@@ -53,6 +54,12 @@ function eventOrganiserDisplayName(event) {
   const o = event?.organiserId;
   if (o && typeof o === "object" && typeof o.name === "string" && o.name.trim()) return o.name.trim();
   return null;
+}
+
+function eventOrganiserTagline(event) {
+  const o = event?.organiserId;
+  if (o && typeof o === "object" && typeof o.hostTagline === "string" && o.hostTagline.trim()) return o.hostTagline.trim();
+  return "";
 }
 
 function NotificationsPanel({
@@ -228,6 +235,16 @@ export default function App() {
   const [profileMode, setProfileMode] = useState("attendee");
   const [bookingMessage, setBookingMessage] = useState("");
   const [paymentMessage, setPaymentMessage] = useState("");
+  const [lastBookingErrorCode, setLastBookingErrorCode] = useState(null);
+  const [checkInVerifyOnly, setCheckInVerifyOnly] = useState(false);
+  const [eventWaitlist, setEventWaitlist] = useState([]);
+  const [staffMyEvents, setStaffMyEvents] = useState([]);
+  const [checkInGateEvent, setCheckInGateEvent] = useState(null);
+  const [dashboardStaff, setDashboardStaff] = useState([]);
+  const [staffInviteEmail, setStaffInviteEmail] = useState("");
+  const [adminEvents, setAdminEvents] = useState([]);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminSnapshotLoaded, setAdminSnapshotLoaded] = useState(false);
   const [resetToken, setResetToken] = useState("");
   const [refunds, setRefunds] = useState([]);
   const [hostRefunds, setHostRefunds] = useState([]);
@@ -297,6 +314,16 @@ export default function App() {
   useEffect(() => {
     refreshFollowing();
   }, [refreshFollowing, user?.id]);
+
+  useEffect(() => {
+    if (user) {
+      void loadStaffMyEvents();
+    } else {
+      setStaffMyEvents([]);
+      setCheckInGateEvent(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadStaffMyEvents closes over latest user
+  }, [user?.id]);
 
   useEffect(() => {
     if (user && notifOpen) refreshFollowing();
@@ -471,6 +498,28 @@ export default function App() {
     const match = location.pathname.match(/^\/host\/([a-fA-F0-9]{24})\/?$/);
     return match ? match[1] : null;
   }, [location.pathname]);
+
+  useEffect(() => {
+    const baseTitle = "EventwithEase — Events, tickets & check-in";
+    const onEventPage =
+      Boolean(eventIdInPath) &&
+      selectedEvent?._id &&
+      String(selectedEvent._id) === String(eventIdInPath);
+    if (onEventPage && selectedEvent?.title) {
+      document.title = `${selectedEvent.title} · EventwithEase`;
+      const plain = (selectedEvent.description || "").replace(/\s+/g, " ").trim();
+      const desc = plain.slice(0, 160);
+      let meta = document.querySelector('meta[name="description"]');
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "description");
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", desc || `${selectedEvent.title} on EventwithEase — tickets and check-in.`);
+    } else {
+      document.title = baseTitle;
+    }
+  }, [eventIdInPath, selectedEvent?._id, selectedEvent?.title, selectedEvent?.description]);
 
   const hostNextCountdown = useMemo(() => {
     if (!hostIdInPath || !hostPage?.events?.length) return null;
@@ -648,8 +697,18 @@ export default function App() {
     }
 
     if (stripeSuccess) {
+      const sessionId = params.get("session_id");
       const pending = localStorage.getItem("eventwithease-pending-payment");
-      if (pending) {
+      if (sessionId) {
+        try {
+          await api.post("/bookings", { stripeCheckoutSessionId: sessionId });
+          localStorage.removeItem("eventwithease-pending-payment");
+          await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), loadHostRefunds()]);
+          flash("Stripe payment confirmed. Tickets generated.");
+        } catch (error) {
+          flash(error.response?.data?.message || "Stripe payment confirmed but tickets could not be created.", true);
+        }
+      } else if (pending) {
         try {
           const parsed = JSON.parse(pending);
           await api.post("/bookings", {
@@ -700,10 +759,36 @@ export default function App() {
 
   async function loadMyEvents() {
     try {
-      const response = await api.get("/events/my-events");
+      const qs = userRoles.includes("admin") ? "?all=1" : "";
+      const response = await api.get(`/events/my-events${qs}`);
       setMyEvents(response.data);
     } catch {
       setMyEvents([]);
+    }
+  }
+
+  async function loadStaffMyEvents() {
+    if (!user) {
+      setStaffMyEvents([]);
+      return;
+    }
+    try {
+      const { data } = await api.get("/event-staff/mine");
+      setStaffMyEvents(Array.isArray(data) ? data : []);
+    } catch {
+      setStaffMyEvents([]);
+    }
+  }
+
+  async function loadAdminSnapshot() {
+    if (!userRoles.includes("admin")) return;
+    try {
+      const [ev, us] = await Promise.all([api.get("/admin/events"), api.get("/admin/users")]);
+      setAdminEvents(Array.isArray(ev.data) ? ev.data : []);
+      setAdminUsers(Array.isArray(us.data) ? us.data : []);
+      setAdminSnapshotLoaded(true);
+    } catch (e) {
+      flash(e.response?.data?.message || "Could not load admin data.", true);
     }
   }
 
@@ -1154,6 +1239,7 @@ export default function App() {
         items,
         discountCode: trimmedCode || undefined,
       });
+      setLastBookingErrorCode(null);
       await Promise.all([loadEvents(), loadMyTickets()]);
       setTicketCart(Object.fromEntries(selectedEvent.ticketTypes.map((ticket) => [ticket._id, 0])));
       setDiscountCode("");
@@ -1164,8 +1250,23 @@ export default function App() {
       });
     } catch (error) {
       const message = error.response?.data?.message || "Unable to complete booking.";
+      const code = error.response?.data?.code ?? null;
+      setLastBookingErrorCode(code);
       setBookingMessage(message);
       flash(message, true);
+    }
+  }
+
+  async function joinEventWaitlistForSelection() {
+    if (!selectedEvent || !user) return;
+    const items = checkoutItems();
+    const first = items.find((row) => row.quantity > 0);
+    const ticketTypeId = first?.ticketTypeId || null;
+    try {
+      await api.post("/waitlist", { eventId: selectedEvent._id, ticketTypeId: ticketTypeId || undefined });
+      flash("You are on the waitlist. We will notify you if capacity opens.");
+    } catch (err) {
+      flash(err.response?.data?.message || "Could not join waitlist.", true);
     }
   }
 
@@ -1264,8 +1365,43 @@ export default function App() {
   }
 
 
+  async function addStaffMember() {
+    if (!dashboard?.event?._id || !staffInviteEmail.trim()) return;
+    try {
+      await api.post(`/event-staff/event/${dashboard.event._id}`, { email: staffInviteEmail.trim().toLowerCase() });
+      setStaffInviteEmail("");
+      flash("Door staff added.");
+      await openDashboard(dashboard.event._id);
+    } catch (error) {
+      flash(error.response?.data?.message || "Could not add staff.", true);
+    }
+  }
+
+  async function removeStaffMember(staffRowId) {
+    try {
+      await api.delete(`/event-staff/${staffRowId}`);
+      flash("Staff removed.");
+      if (dashboard?.event?._id) await openDashboard(dashboard.event._id);
+    } catch (error) {
+      flash(error.response?.data?.message || "Could not remove staff.", true);
+    }
+  }
+
+  async function adminCancelEvent(eventId) {
+    if (!window.confirm("Cancel this event for all attendees? This sends cancellation emails when SMTP is on.")) return;
+    try {
+      await api.post(`/admin/events/${eventId}/cancel`);
+      flash("Event cancelled.");
+      await Promise.all([loadEvents(), loadAdminSnapshot()]);
+    } catch (error) {
+      flash(error.response?.data?.message || "Cancel failed.", true);
+    }
+  }
+
   async function openDashboard(id) {
     try {
+      setCheckInGateEvent(null);
+      setEventWaitlist([]);
       const response = await api.get(`/events/${id}/dashboard`);
       setDashboard(response.data);
       try {
@@ -1273,6 +1409,18 @@ export default function App() {
         setRefundRequests(refundsResponse.data);
       } catch {
         setRefundRequests([]);
+      }
+      try {
+        const waitlistResponse = await api.get(`/waitlist/event/${id}`);
+        setEventWaitlist(Array.isArray(waitlistResponse.data) ? waitlistResponse.data : []);
+      } catch {
+        setEventWaitlist([]);
+      }
+      try {
+        const staffRes = await api.get(`/event-staff/event/${id}`);
+        setDashboardStaff(Array.isArray(staffRes.data) ? staffRes.data : []);
+      } catch {
+        setDashboardStaff([]);
       }
       await loadHostRefunds();
       try {
@@ -1303,25 +1451,31 @@ export default function App() {
       checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    if (!userRoles.includes("admin") && !dashboard?.event?._id) {
-      const msg = "Select your event under Managed events first — check-in applies to that gate only.";
+    const gateEventId = checkInGateEvent?._id || dashboard?.event?._id;
+    if (!userRoles.includes("admin") && !gateEventId) {
+      const msg =
+        "Select your event (Managed events or your staff assignment), then scan — check-in applies to that gate only.";
       setCheckInNotice({ ok: false, text: msg });
       flash(msg, true);
       checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     try {
-      const body = { ticketCode: code };
-      if (dashboard?.event?._id) {
-        body.eventId = dashboard.event._id;
+      const body = { ticketCode: code, verifyOnly: checkInVerifyOnly };
+      if (gateEventId) {
+        body.eventId = gateEventId;
       }
       const response = await api.post("/checkin", body);
       const name = response.data.ticket?.userId?.name || "Attendee";
-      const msg = `${name} checked in successfully.`;
+      const msg = response.data.verifyOnly
+        ? `${name} — ticket verified (not checked in).`
+        : `${name} checked in successfully.`;
       setCheckInNotice({ ok: true, text: msg });
       flash(msg);
       setCheckInCode("");
-      if (dashboard?.event?._id) await openDashboard(dashboard.event._id);
+      if (gateEventId && !response.data.verifyOnly) {
+        await openDashboard(String(gateEventId));
+      }
       checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (error) {
       const data = error.response?.data;
@@ -1458,11 +1612,13 @@ export default function App() {
     }
 
     const rows = [
-      ["Name", "Email", "Ticket Code", "Status"],
+      ["Name", "Email", "Ticket type", "Ticket code", "Checked in at", "Status"],
       ...dashboard.attendees.map((ticket) => [
         ticket.userId?.name || "",
         ticket.userId?.email || "",
+        ticket.ticketTypeName || "",
         ticket.ticketCode,
+        ticket.status === "checked-in" && ticket.checkedInAt ? new Date(ticket.checkedInAt).toISOString() : "",
         ticket.status,
       ]),
     ];
@@ -1520,6 +1676,11 @@ export default function App() {
     setMyTickets([]);
     setMyEvents([]);
     setDashboard(null);
+    setCheckInGateEvent(null);
+    setDashboardStaff([]);
+    setAdminEvents([]);
+    setAdminUsers([]);
+    setAdminSnapshotLoaded(false);
     setSelectedEvent(null);
     const saved = JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]");
     setWishlist(Array.isArray(saved) ? saved.map(String) : []);
@@ -1548,6 +1709,15 @@ export default function App() {
     if (!url) return;
     navigator.clipboard.writeText(url).then(
       () => flash("Event link copied to clipboard."),
+      () => flash("Could not copy link.", true)
+    );
+  }
+
+  function copyOgPreviewLink() {
+    if (!selectedEvent?._id) return;
+    const url = ogEventUrl(selectedEvent._id);
+    navigator.clipboard.writeText(url).then(
+      () => flash("Preview link copied — use this in LinkedIn/Facebook for rich cards."),
       () => flash("Could not copy link.", true)
     );
   }
@@ -1592,15 +1762,15 @@ export default function App() {
   }
 
   function shareLinkedIn() {
-    const url = getSelectedEventShareUrl();
-    if (!url) return;
-    openShareWindow(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`);
+    if (!selectedEvent?._id) return;
+    const preview = ogEventUrl(selectedEvent._id);
+    openShareWindow(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(preview)}`);
   }
 
   function shareFacebook() {
-    const url = getSelectedEventShareUrl();
-    if (!url) return;
-    openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
+    if (!selectedEvent?._id) return;
+    const preview = ogEventUrl(selectedEvent._id);
+    openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(preview)}`);
   }
 
   function shareInstagramHint() {
@@ -2256,6 +2426,57 @@ export default function App() {
                   </button>
                 </div>
               ) : null}
+              {userRoles.includes("admin") ? (
+                <div className="admin-console-card">
+                  <p className="card-label">Admin directory</p>
+                  <p className="auth-note">
+                    List any event or user account. Force-cancel sends attendee cancellation emails when SMTP is enabled.
+                  </p>
+                  <button type="button" className="ghost-button" onClick={() => void loadAdminSnapshot()}>
+                    Load / refresh directory
+                  </button>
+                  {adminSnapshotLoaded ? (
+                    <>
+                      <h3 className="analytics-table-heading admin-console-subhead">Events (latest 200)</h3>
+                      <ul className="admin-dir-list">
+                        {adminEvents.map((ev) => (
+                          <li key={ev._id} className="admin-dir-row">
+                            <div>
+                              <strong>{ev.title}</strong>
+                              <p className="auth-note">
+                                {formatDate(ev.date)}
+                                {ev.city ? ` · ${ev.city}` : ""} · host {ev.organiserId?.email || "—"}
+                                {ev.cancelledAt ? " · cancelled" : ""}
+                              </p>
+                            </div>
+                            {!ev.cancelledAt ? (
+                              <button type="button" className="ghost-button compact-button" onClick={() => adminCancelEvent(ev._id)}>
+                                Cancel event
+                              </button>
+                            ) : (
+                              <span className="pill pill--warn">Cancelled</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <h3 className="analytics-table-heading admin-console-subhead">Users (latest 150)</h3>
+                      <ul className="admin-dir-list admin-dir-list--users">
+                        {adminUsers.map((u) => (
+                          <li key={u._id} className="admin-dir-row">
+                            <div>
+                              <strong>{u.name || "—"}</strong>
+                              <p className="auth-note">
+                                {u.email} · {(u.roles?.length ? u.roles : u.role ? [u.role] : []).join(", ") || "—"}
+                                {u.emailVerified ? " · verified" : ""}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <form className="stack-form auth-form" onSubmit={handleAuthSubmit}>
@@ -2379,6 +2600,9 @@ export default function App() {
                         </span>
                       ) : null}
                     </div>
+                  {eventOrganiserTagline(event) ? (
+                    <p className="meta-host-tagline">{eventOrganiserTagline(event)}</p>
+                  ) : null}
                   <div className="event-actions">
                     <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
                     <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
@@ -2491,6 +2715,9 @@ export default function App() {
                         )}
                       </span>
                     </div>
+                    {eventOrganiserTagline(event) ? (
+                      <p className="meta-host-tagline">{eventOrganiserTagline(event)}</p>
+                    ) : null}
                     <div className="event-actions">
                       <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
                       <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
@@ -2516,6 +2743,9 @@ export default function App() {
                 </button>
                 <button type="button" className="ghost-button compact-button" onClick={copySelectedEventLink}>
                   Copy link
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={copyOgPreviewLink}>
+                  Copy OG preview
                 </button>
                 <button type="button" className="ghost-button compact-button" onClick={shareWhatsApp}>
                   WhatsApp
@@ -2578,6 +2808,9 @@ export default function App() {
                   {" · "}
                   Follow them for their lineup of events.
                 </p>
+              ) : null}
+              {eventOrganiserTagline(selectedEvent) ? (
+                <p className="auth-note host-tagline-detail">{eventOrganiserTagline(selectedEvent)}</p>
               ) : null}
               <div className="details-grid">
                 <div className="detail-block">
@@ -2786,6 +3019,14 @@ export default function App() {
                   </div>
                   {paymentMessage && <p className="booking-message">{paymentMessage}</p>}
                   {bookingMessage && <p className="booking-message">{bookingMessage}</p>}
+                  {lastBookingErrorCode === "SOLD_OUT" && user ? (
+                    <div className="waitlist-cta">
+                      <p className="auth-note">Sold out for that selection — join the waitlist and we will prioritize you if capacity changes.</p>
+                      <button type="button" className="ghost-button" onClick={joinEventWaitlistForSelection}>
+                        Join waitlist
+                      </button>
+                    </div>
+                  ) : null}
                 </>
               )}
             </div>
@@ -3218,6 +3459,37 @@ export default function App() {
               )}
             </section>
 
+            {staffMyEvents.length > 0 ? (
+              <section className={panelClass("panel", ["organiser", "checkin"])}>
+                <div className="section-head">
+                  <h2>Door staff assignments</h2>
+                  <p className="section-note">
+                    The host added you as check-in only for these events. Pick the gate you are working so scans apply to the right event.
+                    If you also manage the event as host, open it under <strong>Managed events</strong> for the full dashboard — that clears
+                    this gate override.
+                  </p>
+                  {checkInGateEvent ? (
+                    <button type="button" className="ghost-button compact-button" onClick={() => setCheckInGateEvent(null)}>
+                      Clear staff gate (use managed-event dashboard only)
+                    </button>
+                  ) : null}
+                </div>
+                <div className="stack-list">
+                  {staffMyEvents.map((ev) => (
+                    <button
+                      key={ev._id}
+                      type="button"
+                      className={`list-button${checkInGateEvent?._id === ev._id ? " is-active" : ""}`}
+                      onClick={() => setCheckInGateEvent(ev)}
+                    >
+                      <span>{ev.title}</span>
+                      <small>{formatDate(ev.date)}</small>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <section
               id="ewe-checkin"
               className={panelClass("panel span-two full-width", ["checkin", "organiser"])}
@@ -3226,12 +3498,11 @@ export default function App() {
               <div className="section-head">
                 <h2>Check-in dashboard</h2>
                 <p className="section-note">
-                  <strong>Who scans:</strong> whoever is logged in as the <strong>host</strong> (organiser account) at the door — that can
-                  be you even if the same email also bought tickets for this event. You act as host in <strong>Check-in</strong>, select the
-                  event under <strong>Managed events</strong>, then scan or paste each code (including your own pass if you bought one).
-                  One successful scan per ticket; duplicates are rejected. <strong>On the attendee side,</strong> each pass shows{" "}
-                  <strong>Checked in</strong> on <em>My tickets</em> after the server updates — refresh or revisit that page if it still
-                  says booked.
+                  <strong>Who scans:</strong> the <strong>host</strong> (organiser) or <strong>door staff</strong> accounts the host
+                  invited. Select the event under <strong>Managed events</strong> or <strong>Door staff assignments</strong>, then paste or
+                  scan each code (including your own pass if you bought one). One successful scan per ticket; duplicates are rejected.{" "}
+                  <strong>On the attendee side,</strong> each pass shows <strong>Checked in</strong> on <em>My tickets</em> after the server
+                  updates — refresh or revisit that page if it still says booked.
                 </p>
                 {dashboard && (
                   <button className="ghost-button" type="button" onClick={downloadDashboardCsv}>
@@ -3252,7 +3523,15 @@ export default function App() {
                     autoCorrect="off"
                     spellCheck={false}
                   />
-                  <PrimaryButton type="submit">Mark attended</PrimaryButton>
+                  <label className="checkin-verify-toggle">
+                    <input
+                      type="checkbox"
+                      checked={checkInVerifyOnly}
+                      onChange={(e) => setCheckInVerifyOnly(e.target.checked)}
+                    />
+                    Verify only (do not mark attended)
+                  </label>
+                  <PrimaryButton type="submit">{checkInVerifyOnly ? "Verify ticket" : "Mark attended"}</PrimaryButton>
                 </form>
                 {checkInNotice ? (
                   <p className={`checkin-notice${checkInNotice.ok ? " checkin-notice--ok" : " checkin-notice--err"}`} role="status">
@@ -3340,6 +3619,68 @@ export default function App() {
               ) : (
                 <EmptyState label="Select one of your managed events to see live stats" />
               )}
+              {dashboard && eventWaitlist.length > 0 ? (
+                <div className="waitlist-host-block">
+                  <h3 className="analytics-table-heading">Waitlist ({eventWaitlist.length})</h3>
+                  <p className="auth-note">People who asked to be notified if tickets free up.</p>
+                  <ul className="waitlist-host-list">
+                    {eventWaitlist.map((row) => (
+                      <li key={row._id}>
+                        <span className="waitlist-host-position" title="Queue position (FIFO for this event)">
+                          #{row.position ?? "—"}
+                        </span>
+                        <strong>{row.userId?.name || "Attendee"}</strong>
+                        <span className="waitlist-host-email">{row.userId?.email || ""}</span>
+                        <span className="auth-note">
+                          {" "}
+                          ·{" "}
+                          {row.ticketTypeId
+                            ? dashboard.event?.ticketTypes?.find((t) => String(t._id) === String(row.ticketTypeId))
+                                ?.name || "Ticket type"
+                            : "Any ticket type"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {dashboard?.event?._id && isOrganiser ? (
+                <div className="staff-host-block">
+                  <h3 className="analytics-table-heading">Door staff</h3>
+                  <p className="auth-note">
+                    Invite another signed-up account to scan tickets for this event only. They will see it under Door staff assignments.
+                  </p>
+                  <div className="inline-form staff-invite-form">
+                    <input
+                      type="email"
+                      placeholder="Staff email (must already have an account)"
+                      value={staffInviteEmail}
+                      onChange={(e) => setStaffInviteEmail(e.target.value)}
+                      autoComplete="email"
+                    />
+                    <button type="button" className="ghost-button" onClick={() => void addStaffMember()}>
+                      Add staff
+                    </button>
+                  </div>
+                  {dashboardStaff.length ? (
+                    <ul className="staff-host-list">
+                      {dashboardStaff.map((row) => (
+                        <li key={row._id}>
+                          <div>
+                            <strong>{row.userId?.name || "User"}</strong>
+                            <span className="waitlist-host-email">{row.userId?.email || ""}</span>
+                          </div>
+                          <button type="button" className="ghost-button compact-button" onClick={() => removeStaffMember(row._id)}>
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="auth-note">No extra door staff yet.</p>
+                  )}
+                </div>
+              ) : null}
             </section>
 
             <section className={panelClass("panel", ["organiser", "checkin"])}>

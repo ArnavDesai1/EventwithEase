@@ -11,6 +11,7 @@ const bookingSchema = new mongoose.Schema(
     refundStatus: { type: String, enum: ["none", "pending", "approved", "rejected"], default: "none" },
     refundedAmount: { type: Number, default: 0 },
     quantity: { type: Number, required: true, min: 1 },
+    stripeCheckoutSessionId: { type: String, default: null, sparse: true, unique: true },
   },
   { timestamps: true }
 );

@@ -25,6 +25,8 @@ const ticketTypeSchema = new mongoose.Schema(
     earlyBirdPrice: { type: Number, min: 0 },
     earlyBirdEndsAt: { type: Date },
     quantity: { type: Number, required: true, min: 1 },
+    /** Issued tickets for this type; kept in sync with bookings (backfilled at startup). */
+    soldCount: { type: Number, default: 0, min: 0 },
   },
   { _id: true }
 );
@@ -39,6 +41,8 @@ const eventSchema = new mongoose.Schema(
     category: { type: String, default: "General", trim: true },
     date: { type: Date, required: true },
     cancelledAt: { type: Date, default: null },
+    /** Set when we emailed ticket holders a ~24h doors reminder (lifecycle job). */
+    checkInReminderSentAt: { type: Date, default: null },
     organiserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     discountCodes: { type: [discountCodeSchema], default: [] },
     ticketTypes: {

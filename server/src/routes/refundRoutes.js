@@ -2,8 +2,10 @@ import express from "express";
 import Booking from "../models/Booking.js";
 import Event from "../models/Event.js";
 import Refund from "../models/Refund.js";
+import Ticket from "../models/Ticket.js";
 import { hasRole, requireAuth, requireRole } from "../middleware/auth.js";
 import { approveRefundDocument, rejectRefundDocument } from "../services/refundLifecycle.js";
+import { notifyOrganiserRefundRequested } from "../services/transactionalEmail.js";
 import { autoApproveAtFromNow, computeCancellationAmounts } from "../config/cancellationPolicy.js";
 
 const router = express.Router();
@@ -24,6 +26,11 @@ router.post("/", requireAuth, async (req, res) => {
     const event = await Event.findById(booking.eventId);
     if (!event) {
       return res.status(404).json({ message: "Event not found." });
+    }
+
+    const bookingTickets = await Ticket.find({ bookingId: booking._id });
+    if (bookingTickets.some((t) => t.status === "checked-in")) {
+      return res.status(400).json({ message: "Cannot request a refund after check-in." });
     }
 
     const now = new Date();
@@ -64,6 +71,8 @@ router.post("/", requireAuth, async (req, res) => {
 
     booking.refundStatus = "pending";
     await booking.save();
+
+    await notifyOrganiserRefundRequested(refund).catch(() => {});
 
     res.status(201).json({ refund });
   } catch (error) {
