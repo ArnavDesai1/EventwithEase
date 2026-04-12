@@ -10,6 +10,7 @@ import reviewRoutes from "./routes/reviewRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import checkinRoutes from "./routes/checkinRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js";
 import { startFeedbackInviteScheduler } from "./jobs/feedbackInvites.js";
 
 dotenv.config();
@@ -36,6 +37,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/checkin", checkinRoutes);
+app.use("/api/wishlist", wishlistRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found." });

@@ -9,6 +9,7 @@ import LoadingSpinner from "./components/ui/LoadingSpinner.jsx";
 import AnimatedNumber from "./components/ui/AnimatedNumber.jsx";
 import TopNav from "./components/layout/TopNav.jsx";
 import SiteFooter from "./components/layout/SiteFooter.jsx";
+import QrScannerPanel from "./components/QrScannerPanel.jsx";
 import "./App.css";
 
 const emptyEventForm = {
@@ -51,6 +52,7 @@ export default function App() {
   const [discountCode, setDiscountCode] = useState("");
   const [dashboard, setDashboard] = useState(null);
   const [checkInCode, setCheckInCode] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
@@ -125,9 +127,11 @@ export default function App() {
     return new Date(selectedEvent.date) < new Date();
   }, [selectedEvent]);
 
+  const wishlistSet = useMemo(() => new Set(wishlist.map(String)), [wishlist]);
+
   const wishlistedEvents = useMemo(
-    () => events.filter((event) => wishlist.includes(event._id)),
-    [events, wishlist]
+    () => events.filter((event) => wishlistSet.has(String(event._id))),
+    [events, wishlistSet]
   );
 
   const wishlistReminders = useMemo(() => {
@@ -152,7 +156,7 @@ export default function App() {
     wishlistedEvents.forEach((event) => addCategoryScore(event.category, 2));
 
     return [...events]
-      .filter((event) => !wishlist.includes(event._id))
+      .filter((event) => !wishlistSet.has(String(event._id)))
       .map((event) => ({
         event,
         score: (scoreByCategory.get(event.category) || 0) + (new Date(event.date) > new Date() ? 1 : 0),
@@ -160,7 +164,7 @@ export default function App() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 4)
       .map((entry) => entry.event);
-  }, [events, myTickets, wishlistedEvents, wishlist]);
+  }, [events, myTickets, wishlistedEvents, wishlistSet]);
 
   const refundsByBooking = useMemo(() => {
     return refunds.reduce((acc, refund) => {
@@ -170,8 +174,9 @@ export default function App() {
   }, [refunds]);
 
   useEffect(() => {
+    if (user) return;
     localStorage.setItem("eventwithease-wishlist", JSON.stringify(wishlist));
-  }, [wishlist]);
+  }, [wishlist, user]);
 
   useEffect(() => {
     authRoleRef.current = authForm.role;
@@ -256,6 +261,27 @@ export default function App() {
     }, 5000);
   }
 
+  async function mergeWishlistAfterLogin() {
+    try {
+      const raw = JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]");
+      const local = Array.isArray(raw) ? raw.map(String) : [];
+      if (local.length) {
+        await api.post("/wishlist/sync", { eventIds: local });
+        localStorage.removeItem("eventwithease-wishlist");
+      }
+      const { data } = await api.get("/wishlist");
+      setWishlist((data.eventIds || []).map(String));
+    } catch {
+      try {
+        const { data } = await api.get("/wishlist");
+        setWishlist((data.eventIds || []).map(String));
+      } catch {
+        const fallback = JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]");
+        setWishlist(Array.isArray(fallback) ? fallback.map(String) : []);
+      }
+    }
+  }
+
   async function hydrateSession() {
     const token = localStorage.getItem("eventwithease-token");
 
@@ -264,7 +290,7 @@ export default function App() {
         try {
           const response = await api.get("/auth/me");
           setUser(response.data.user);
-          await Promise.all([loadMyTickets(), loadMyEvents(), loadRefunds()]);
+          await Promise.all([loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
         } catch {
           localStorage.removeItem("eventwithease-token");
           setUser(null);
@@ -352,7 +378,7 @@ export default function App() {
       const response = await api.post("/auth/verify-email", { token: verifyToken });
       localStorage.setItem("eventwithease-token", response.data.token);
       setUser(response.data.user);
-      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds()]);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
       flash(response.data.message || "Email verified.");
     } catch (error) {
       flash(error.response?.data?.message || "Unable to verify email.", true);
@@ -500,7 +526,7 @@ export default function App() {
       localStorage.setItem("eventwithease-token", response.data.token);
       setUser(response.data.user);
       setAuthForm(emptyAuthForm);
-      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents()]);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
       flash(authMode === "login" ? "Welcome back." : "Account created.");
     } catch (error) {
       flash(error.response?.data?.message || "Authentication failed.", true);
@@ -516,7 +542,7 @@ export default function App() {
       });
       localStorage.setItem("eventwithease-token", googleResponse.data.token);
       setUser(googleResponse.data.user);
-      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents()]);
+      await Promise.all([loadEvents(), loadMyTickets(), loadMyEvents(), loadRefunds(), mergeWishlistAfterLogin()]);
       flash("Signed in with Google.");
     } catch (error) {
       flash(error.response?.data?.message || "Google sign-in failed.", true);
@@ -792,13 +818,16 @@ export default function App() {
     image.src = url;
   }
 
-  async function requestRefund(bookingId) {
+  async function cancelBooking(bookingId) {
     try {
-      const response = await api.post("/refunds", { bookingId, reason: "Requested by attendee." });
-      setRefunds((current) => [response.data.refund, ...current]);
-      flash("Refund request submitted.");
+      const response = await api.post(`/bookings/${bookingId}/cancel`, {});
+      if (response.data.kind === "refund_requested" && response.data.refund) {
+        setRefunds((current) => [response.data.refund, ...current]);
+      }
+      flash(response.data.message || "Booking updated.");
+      await Promise.all([loadMyTickets(), loadRefunds()]);
     } catch (error) {
-      flash(error.response?.data?.message || "Unable to request refund.", true);
+      flash(error.response?.data?.message || "Unable to cancel booking.", true);
     }
   }
 
@@ -887,10 +916,27 @@ export default function App() {
   }
 
 
-  function toggleWishlist(eventId) {
-    setWishlist((current) =>
-      current.includes(eventId) ? current.filter((id) => id !== eventId) : [...current, eventId]
-    );
+  async function toggleWishlist(eventId) {
+    const id = String(eventId);
+    if (user) {
+      const on = wishlistSet.has(id);
+      try {
+        if (on) {
+          const { data } = await api.delete(`/wishlist/${id}`);
+          setWishlist((data.eventIds || []).map(String));
+        } else {
+          const { data } = await api.post(`/wishlist/${id}`);
+          setWishlist((data.eventIds || []).map(String));
+        }
+      } catch (error) {
+        flash(error.response?.data?.message || "Could not update wishlist.", true);
+      }
+      return;
+    }
+    setWishlist((current) => {
+      const cur = current.map(String);
+      return cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    });
   }
 
   function generateEventAgenda(event) {
@@ -1053,6 +1099,8 @@ export default function App() {
     setMyEvents([]);
     setDashboard(null);
     setSelectedEvent(null);
+    const saved = JSON.parse(localStorage.getItem("eventwithease-wishlist") || "[]");
+    setWishlist(Array.isArray(saved) ? saved.map(String) : []);
     flash("Logged out.");
   }
 
@@ -1068,13 +1116,82 @@ export default function App() {
     scrollToRef(browseRef);
   }
 
+  function getSelectedEventShareUrl() {
+    if (!selectedEvent?._id) return "";
+    return `${window.location.origin}/event/${selectedEvent._id}`;
+  }
+
   function copySelectedEventLink() {
-    if (!selectedEvent?._id) return;
-    const url = `${window.location.origin}/event/${selectedEvent._id}`;
+    const url = getSelectedEventShareUrl();
+    if (!url) return;
     navigator.clipboard.writeText(url).then(
       () => flash("Event link copied to clipboard."),
       () => flash("Could not copy link.", true)
     );
+  }
+
+  function shareSelectedEventNative() {
+    const url = getSelectedEventShareUrl();
+    if (!url || !selectedEvent) return;
+    const title = selectedEvent.title || "Event";
+    const text = `Check out ${title} on EventwithEase`;
+    if (navigator.share) {
+      navigator.share({ title, text, url }).catch(() => {});
+    } else {
+      copySelectedEventLink();
+    }
+  }
+
+  function openShareWindow(href) {
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
+
+  function shareWhatsApp() {
+    const url = getSelectedEventShareUrl();
+    if (!url || !selectedEvent) return;
+    const text = encodeURIComponent(`${selectedEvent.title}\n${url}`);
+    openShareWindow(`https://wa.me/?text=${text}`);
+  }
+
+  function shareTelegram() {
+    const url = getSelectedEventShareUrl();
+    if (!url || !selectedEvent) return;
+    const text = encodeURIComponent(selectedEvent.title);
+    const u = encodeURIComponent(url);
+    openShareWindow(`https://t.me/share/url?url=${u}&text=${text}`);
+  }
+
+  function shareTwitter() {
+    const url = getSelectedEventShareUrl();
+    if (!url || !selectedEvent) return;
+    const text = encodeURIComponent(`${selectedEvent.title}`);
+    const u = encodeURIComponent(url);
+    openShareWindow(`https://twitter.com/intent/tweet?text=${text}&url=${u}`);
+  }
+
+  function shareLinkedIn() {
+    const url = getSelectedEventShareUrl();
+    if (!url) return;
+    openShareWindow(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`);
+  }
+
+  function shareFacebook() {
+    const url = getSelectedEventShareUrl();
+    if (!url) return;
+    openShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
+  }
+
+  function shareInstagramHint() {
+    copySelectedEventLink();
+    flash("Link copied — paste it in your Instagram story, bio, or DM.");
+  }
+
+  function shareEmail() {
+    const url = getSelectedEventShareUrl();
+    if (!url || !selectedEvent) return;
+    const subject = encodeURIComponent(`Join me: ${selectedEvent.title}`);
+    const body = encodeURIComponent(`${selectedEvent.title}\n\n${url}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   }
 
   function goBook() {
@@ -1410,7 +1527,7 @@ export default function App() {
                   <div className="event-actions">
                     <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
                     <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
-                      {wishlist.includes(event._id) ? "Saved" : "Wishlist"}
+                      {wishlistSet.has(String(event._id)) ? "Saved" : "Wishlist"}
                     </button>
                   </div>
                 </div>
@@ -1508,7 +1625,7 @@ export default function App() {
                     <div className="event-actions">
                       <PrimaryButton onClick={() => handleSelectEvent(event._id)}>View details</PrimaryButton>
                       <button className="ghost-button" type="button" onClick={() => toggleWishlist(event._id)}>
-                        {wishlist.includes(event._id) ? "Saved" : "Wishlist"}
+                        {wishlistSet.has(String(event._id)) ? "Saved" : "Wishlist"}
                       </button>
                     </div>
                   </div>
@@ -1521,12 +1638,38 @@ export default function App() {
 
         {profileMode === "attendee" && (
         <section id="ewe-book" className={panelClass("panel", ["attendee"])} ref={detailsRef}>
-          <div className="section-head section-head--split">
+          <div className="section-head section-head--split section-head--wrap">
             <h2>Book tickets</h2>
             {selectedEvent ? (
-              <button type="button" className="ghost-button compact-button" onClick={copySelectedEventLink}>
-                Copy event link
-              </button>
+              <div className="share-actions-bar" role="group" aria-label="Share this event">
+                <button type="button" className="ghost-button compact-button" onClick={shareSelectedEventNative}>
+                  Share
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={copySelectedEventLink}>
+                  Copy link
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareWhatsApp}>
+                  WhatsApp
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareTelegram}>
+                  Telegram
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareTwitter}>
+                  X
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareLinkedIn}>
+                  LinkedIn
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareFacebook}>
+                  Facebook
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareInstagramHint}>
+                  Instagram
+                </button>
+                <button type="button" className="ghost-button compact-button" onClick={shareEmail}>
+                  Email
+                </button>
+              </div>
             ) : null}
           </div>
 
@@ -1624,7 +1767,7 @@ export default function App() {
                   )}
                 </div>
                 {reviews.length ? (
-                  <div className="review-grid">
+                  <div className="review-rail" role="region" aria-label="Reviews carousel">
                     {reviews.map((review) => (
                       <div key={review._id} className="review-card">
                         <div className="review-meta">
@@ -1989,7 +2132,17 @@ export default function App() {
           </div>
           <div className="ticket-stack">
             {myTickets.length ? (
-              myTickets.map((ticket, index) => (
+              myTickets.map((ticket, index) => {
+                const isLeadTicket =
+                  myTickets.findIndex((t) => String(t.bookingId) === String(ticket.bookingId)) === index;
+                const eventNotStarted = ticket.eventId?.date && new Date(ticket.eventId.date) > new Date();
+                const canCancelBooking =
+                  isLeadTicket &&
+                  eventNotStarted &&
+                  ticket.status === "booked" &&
+                  !refundsByBooking[ticket.bookingId];
+
+                return (
                 <article className="ticket-card" key={ticket._id} style={{ animationDelay: `${index * 0.08}s` }}>
                   <div>
                     <p className="card-label">Ticket ready</p>
@@ -2006,9 +2159,9 @@ export default function App() {
                         </span>
                       )}
                     </div>
-                    {!refundsByBooking[ticket.bookingId] && ticket.status !== "refunded" && (
-                      <button className="ghost-button" type="button" onClick={() => requestRefund(ticket.bookingId)}>
-                        Request refund
+                    {canCancelBooking && (
+                      <button className="ghost-button" type="button" onClick={() => cancelBooking(ticket.bookingId)}>
+                        Cancel booking
                       </button>
                     )}
                   </div>
@@ -2019,7 +2172,8 @@ export default function App() {
                     </button>
                   </div>
                 </article>
-              ))
+                );
+              })
             ) : (
               <EmptyState label="Your booked tickets will appear here" />
             )}
@@ -2052,10 +2206,20 @@ export default function App() {
           <div className="stack-list">
             {wishlistedEvents.length ? (
               wishlistedEvents.map((event) => (
-                <button key={event._id} className="list-button" onClick={() => handleSelectEvent(event._id)}>
-                  <span>{event.title}</span>
-                  <small>Reminder set for {formatDate(event.date)}</small>
-                </button>
+                <div key={event._id} className="wishlist-item">
+                  <button className="list-button wishlist-main" type="button" onClick={() => handleSelectEvent(event._id)}>
+                    <span>{event.title}</span>
+                    <small>Reminder set for {formatDate(event.date)}</small>
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button compact-button"
+                    aria-label={`Remove ${event.title} from wishlist`}
+                    onClick={() => toggleWishlist(event._id)}
+                  >
+                    Remove
+                  </button>
+                </div>
               ))
             ) : (
               <EmptyState label="Save events to get reminder notes here" />
@@ -2100,6 +2264,23 @@ export default function App() {
                 <input placeholder="Paste ticket code here..." value={checkInCode} onChange={(e) => setCheckInCode(e.target.value)} />
                 <PrimaryButton type="submit">Mark attended</PrimaryButton>
               </form>
+              <div className="dashboard-checkin-tools">
+                <button type="button" className="ghost-button" onClick={() => setScannerOpen((open) => !open)}>
+                  {scannerOpen ? "Stop camera" : "Scan QR with camera"}
+                </button>
+              </div>
+              <QrScannerPanel
+                active={scannerOpen}
+                onScan={(code) => {
+                  setCheckInCode(code);
+                  setScannerOpen(false);
+                  flash("Ticket code captured from QR.");
+                }}
+                onCameraError={(msg) => {
+                  flash(msg || "Camera unavailable.", true);
+                  setScannerOpen(false);
+                }}
+              />
 
               {dashboard ? (
                 <div className="dashboard">

@@ -408,6 +408,20 @@ export const bulkReviews = [
   ["Pune Design Weekender 2025", 4, "WiFi struggled during afternoon sessions.", "crowd.arjun@eventwithease.com"],
   ["Chennai Indie Film Showcase 2025", 5, "Projection quality was cinema-grade.", "crowd.priya@eventwithease.com"],
   ["Goa Beach Startup Brunch 2025", 5, "Met our lead investor here. Forever grateful.", "crowd.sid@eventwithease.com"],
+  ["Mumbai Audio & Light Expo 2025", 5, "Demo rooms were sound-treated — you could actually hear the difference.", "crowd.neha@eventwithease.com"],
+  ["Mumbai Audio & Light Expo 2025", 4, "Parking was tight; arrive early or cab it.", "crowd.ishita@eventwithease.com"],
+  ["Delhi Marathon Expo 2025", 5, "Bag check was fast; loved the pace zones map.", "crowd.arjun@eventwithease.com"],
+  ["Delhi Marathon Expo 2025", 4, "Merch queue was long Saturday noon.", "crowd.meera@eventwithease.com"],
+  ["Hyderabad AI Builders Night 2025", 5, "Sponsor swag was tasteful, not junk.", "crowd.tara@eventwithease.com"],
+  ["Pune Design Weekender 2025", 5, "Typography workshop alone was worth the ticket.", "crowd.ananya@eventwithease.com"],
+  ["Chennai Indie Film Showcase 2025", 4, "Great AC in Screen 1; concessions pricey.", "crowd.dev@eventwithease.com"],
+  ["Goa Beach Startup Brunch 2025", 5, "Pitch timers were strict — good discipline.", "crowd.yash@eventwithease.com"],
+  ["Kolkata Winter Street Food Fest 2025", 4, "Vegetarian row was a bit hidden — better signage please.", "crowd.priya@eventwithease.com"],
+  ["Bengaluru Product Leadership Summit 2025", 5, "Roundtables had printed prompts — kept conversations on rails.", "crowd.aarav@eventwithease.com"],
+  ["Hyderabad AI Builders Night 2025", 4, "Would love a printed run-of-show next time.", "crowd.sid@eventwithease.com"],
+  ["Chennai Indie Film Showcase 2025", 5, "Loved the regional shorts block.", "crowd.tara@eventwithease.com"],
+  ["Kolkata Winter Street Food Fest 2025", 5, "Kids’ corner was staffed — parents could actually eat.", "crowd.ishita@eventwithease.com"],
+  ["Pune Design Weekender 2025", 4, "Coffee ran out between sessions — minor fix.", "crowd.neha@eventwithease.com"],
 ];
 
 /** Private feedback for organiser dashboard — past events */

@@ -1789,12 +1789,64 @@ textarea {
   gap: 10px;
 }
 
+.review-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  margin: 0 -4px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.review-rail .review-card {
+  flex: 0 0 min(300px, 88vw);
+  scroll-snap-align: start;
+}
+
 .review-card {
   padding: 12px 14px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.18);
   color: var(--ink-2);
+}
+
+.share-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.section-head--wrap {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.wishlist-item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.wishlist-item .wishlist-main {
+  flex: 1;
+  text-align: left;
+}
+
+.dashboard-checkin-tools {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.qr-scanner-viewport {
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #000;
+  max-width: 100%;
 }
 
 .review-meta {

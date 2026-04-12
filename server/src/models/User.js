@@ -32,6 +32,7 @@ const userSchema = new mongoose.Schema(
     emailVerificationExpires: { type: Date },
     resetPasswordToken: { type: String, default: "" },
     resetPasswordExpires: { type: Date },
+    wishlistEventIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Event" }],
   },
   { timestamps: true }
 );

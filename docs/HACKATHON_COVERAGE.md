@@ -12,11 +12,11 @@
 | Attendee browse | Search, category, date window, city, free/paid (early-bird-aware) |
 | Event detail | Agenda, speakers, FAQ, map/link; `/event/:id` shareable URL |
 | Checkout | Multi-ticket cart; Stripe Checkout (with key) or sandbox; Razorpay order summary (sandbox) |
-| Wishlist | Client-side persistence + in-app reminders (72h) |
-| Check-in | Manual ticket code entry; live stats |
+| Wishlist | Server-synced for signed-in users (guests: localStorage); in-app reminders (72h) |
+| Check-in | Manual ticket code + optional camera QR scan; live stats |
 | Recommendations | Heuristic from past tickets + wishlist categories |
 | AI-style tools | Bullet → description draft; smart schedule from sessions |
-| Refunds | Attendee request; organiser approve/reject |
+| Refunds & cancellation | Paid: cancel creates refund request; free: booking removed; organiser approve/reject refunds |
 | Reviews & feedback | Public reviews; private post-event feedback |
 | Networking | Opt-in LinkedIn visible to other ticket holders |
 | Email | Verification, password reset, post-event feedback invites (when SMTP set) |
@@ -25,8 +25,6 @@
 
 | Item | Status |
 |------|--------|
-| Camera QR scan | Manual code only; no getUserMedia scanner |
-| Wishlist on server | Stored in `localStorage`, not synced to account |
 | “True” LLM | Description/schedule use templates/heuristics, not OpenAI API |
 | Razorpay hosted checkout | Simulated path + order summary; full widget optional |
 | Production hardening | Rate limits, audit logs, webhooks for Stripe, etc. |

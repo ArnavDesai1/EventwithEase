@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import Event from "../models/Event.js";
 import Booking from "../models/Booking.js";
 import Ticket from "../models/Ticket.js";
+import Refund from "../models/Refund.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -127,6 +128,65 @@ router.get("/mine", requireAuth, async (req, res) => {
     res.json(tickets);
   } catch (error) {
     res.status(500).json({ message: "Unable to fetch your tickets.", error: error.message });
+  }
+});
+
+/** Free bookings: delete tickets + booking. Paid: create pending refund (organiser approves). */
+router.post("/:bookingId/cancel", requireAuth, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.bookingId);
+    if (!booking || String(booking.attendeeId) !== String(req.user._id)) {
+      return res.status(404).json({ message: "Booking not found." });
+    }
+
+    if (booking.refundStatus && booking.refundStatus !== "none") {
+      return res.status(400).json({ message: "This booking already has a refund request." });
+    }
+
+    const existingRefund = await Refund.findOne({ bookingId: booking._id });
+    if (existingRefund) {
+      return res.status(400).json({ message: "This booking already has a refund request." });
+    }
+
+    const event = await Event.findById(booking.eventId);
+    if (!event) return res.status(404).json({ message: "Event not found." });
+    if (new Date(event.date) <= new Date()) {
+      return res.status(400).json({ message: "Cannot cancel after the event date." });
+    }
+
+    const tickets = await Ticket.find({ bookingId: booking._id });
+    if (!tickets.length) {
+      return res.status(400).json({ message: "No tickets for this booking." });
+    }
+    if (tickets.some((t) => t.status === "checked-in")) {
+      return res.status(400).json({ message: "Cannot cancel after check-in." });
+    }
+    if (tickets.some((t) => t.status === "refunded")) {
+      return res.status(400).json({ message: "These tickets were already refunded." });
+    }
+
+    if (booking.totalAmount > 0) {
+      const refund = await Refund.create({
+        eventId: booking.eventId,
+        bookingId: booking._id,
+        attendeeId: req.user._id,
+        reason: req.body.reason || "Booking cancelled by attendee.",
+        status: "pending",
+      });
+      booking.refundStatus = "pending";
+      await booking.save();
+      return res.json({
+        kind: "refund_requested",
+        refund,
+        message: "Cancellation recorded. The organiser will process your refund.",
+      });
+    }
+
+    await Ticket.deleteMany({ bookingId: booking._id });
+    await Booking.deleteOne({ _id: booking._id });
+    return res.json({ kind: "deleted", message: "Booking cancelled and tickets released." });
+  } catch (error) {
+    res.status(500).json({ message: "Unable to cancel booking.", error: error.message });
   }
 });
 
