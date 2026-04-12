@@ -330,6 +330,8 @@ export default function App() {
     hostRefunds,
   });
 
+  const statsPath = useMemo(() => /^\/stats\/?$/.test(location.pathname), [location.pathname]);
+
   useEffect(() => {
     const id = setInterval(() => setCountdownNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -566,8 +568,6 @@ export default function App() {
     const match = location.pathname.match(/^\/host\/([a-fA-F0-9]{24})\/?$/);
     return match ? match[1] : null;
   }, [location.pathname]);
-
-  const statsPath = useMemo(() => /^\/stats\/?$/.test(location.pathname), [location.pathname]);
 
   useEffect(() => {
     const baseTitle = "EventwithEase — Events, tickets & check-in";
