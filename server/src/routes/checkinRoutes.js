@@ -5,9 +5,16 @@ import { hasRole, requireAuth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
+function normalizeTicketCode(raw) {
+  const s = String(raw ?? "").trim();
+  const embedded = s.match(/EWE-[A-F0-9]{8}/i);
+  if (embedded) return embedded[0].toUpperCase();
+  return s.replace(/\s+/g, "").toUpperCase();
+}
+
 router.post("/", requireAuth, requireRole("organiser", "admin"), async (req, res) => {
   try {
-    const { ticketCode } = req.body;
+    const ticketCode = normalizeTicketCode(req.body.ticketCode);
 
     if (!ticketCode) {
       return res.status(400).json({ message: "Ticket code is required." });

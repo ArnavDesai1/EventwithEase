@@ -53,6 +53,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState(null);
   const [checkInCode, setCheckInCode] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [checkInNotice, setCheckInNotice] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
@@ -80,6 +81,7 @@ export default function App() {
   const browseRef = useRef(null);
   const organiserRef = useRef(null);
   const checkinRef = useRef(null);
+  const checkinFormRef = useRef(null);
   const ticketsRef = useRef(null);
   const authRef = useRef(null);
   const googleButtonRef = useRef(null);
@@ -903,15 +905,37 @@ export default function App() {
     }
   }
 
+  function normalizeTicketCodeInput(raw) {
+    const s = String(raw ?? "").trim();
+    const embedded = s.match(/EWE-[A-F0-9]{8}/i);
+    return embedded ? embedded[0].toUpperCase() : s.replace(/\s+/g, "").toUpperCase();
+  }
+
   async function handleCheckIn(event) {
     event.preventDefault();
+    setCheckInNotice(null);
+    const code = normalizeTicketCodeInput(checkInCode);
+    if (!code) {
+      const msg = "Enter or scan a ticket code (format EWE-XXXXXXXX).";
+      setCheckInNotice({ ok: false, text: msg });
+      flash(msg, true);
+      checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     try {
-      const response = await api.post("/checkin", { ticketCode: checkInCode });
-      flash(`${response.data.ticket.userId.name} checked in successfully.`);
+      const response = await api.post("/checkin", { ticketCode: code });
+      const name = response.data.ticket?.userId?.name || "Attendee";
+      const msg = `${name} checked in successfully.`;
+      setCheckInNotice({ ok: true, text: msg });
+      flash(msg);
       setCheckInCode("");
       if (dashboard?.event?._id) await openDashboard(dashboard.event._id);
+      checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (error) {
-      flash(error.response?.data?.message || "Unable to check in ticket.", true);
+      const msg = error.response?.data?.message || error.message || "Unable to check in ticket.";
+      setCheckInNotice({ ok: false, text: msg });
+      flash(msg, true);
+      checkinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
 
@@ -1766,6 +1790,13 @@ export default function App() {
                     <span className="review-average">{Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10}/5</span>
                   )}
                 </div>
+                <p className="auth-note review-explainer">
+                  {hasSelectedBooking && selectedEventEnded
+                    ? "Below: public star review (everyone sees it) and private feedback (only the organiser sees it)."
+                    : hasSelectedBooking
+                      ? "When this event’s date has passed, you’ll be able to post a public review and private feedback on this same page."
+                      : "Book a ticket first. After the event, return here for a public review and optional private note to the organiser."}
+                </p>
                 {reviews.length ? (
                   <div className="review-rail" role="region" aria-label="Reviews carousel">
                     {reviews.map((review) => (
@@ -2164,6 +2195,21 @@ export default function App() {
                         Cancel booking
                       </button>
                     )}
+                    {ticket.eventId?.date && new Date(ticket.eventId.date) < new Date() && ticket.eventId?._id ? (
+                      <div className="ticket-feedback-hint">
+                        <p className="auth-note">
+                          After the event: leave a <strong>public review</strong> and <strong>private feedback</strong> for the organiser on the
+                          event page (Book tickets → same event).
+                        </p>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => handleSelectEvent(ticket.eventId._id || ticket.eventId)}
+                        >
+                          Open event — review & feedback
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="ticket-actions">
                     <QRCodeSVG id={`qr-${ticket._id}`} value={ticket.ticketCode} size={96} bgColor="#ffffff" fgColor="#0d0f14" />
@@ -2175,7 +2221,10 @@ export default function App() {
                 );
               })
             ) : (
-              <EmptyState label="Your booked tickets will appear here" />
+              <EmptyState
+                label="Your booked tickets will appear here"
+                hint="After you attend an event, open it again from Browse to leave a public review and private organiser feedback."
+              />
             )}
           </div>
         </section>
@@ -2260,18 +2309,36 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <form className="inline-form dashboard-checkin-form" onSubmit={handleCheckIn}>
-                <input placeholder="Paste ticket code here..." value={checkInCode} onChange={(e) => setCheckInCode(e.target.value)} />
-                <PrimaryButton type="submit">Mark attended</PrimaryButton>
-              </form>
+              <div className="checkin-form-wrap" ref={checkinFormRef}>
+                <form className="inline-form dashboard-checkin-form" onSubmit={handleCheckIn}>
+                  <input
+                    placeholder="Paste ticket code here..."
+                    value={checkInCode}
+                    onChange={(e) => {
+                      setCheckInCode(e.target.value);
+                      setCheckInNotice(null);
+                    }}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <PrimaryButton type="submit">Mark attended</PrimaryButton>
+                </form>
+                {checkInNotice ? (
+                  <p className={`checkin-notice${checkInNotice.ok ? " checkin-notice--ok" : " checkin-notice--err"}`} role="status">
+                    {checkInNotice.text}
+                  </p>
+                ) : null}
+              </div>
               <div className="dashboard-checkin-tools">
-                <button type="button" className="ghost-button" onClick={() => setScannerOpen((open) => !open)}>
+                <button type="button" className="ghost-button dashboard-scan-btn" onClick={() => setScannerOpen((open) => !open)}>
                   {scannerOpen ? "Stop camera" : "Scan QR with camera"}
                 </button>
               </div>
               <QrScannerPanel
                 active={scannerOpen}
                 onScan={(code) => {
+                  setCheckInNotice(null);
                   setCheckInCode(code);
                   setScannerOpen(false);
                   flash("Ticket code captured from QR.");

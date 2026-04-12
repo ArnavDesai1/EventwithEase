@@ -1407,6 +1407,10 @@ textarea {
   .stats-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1525,6 +1529,62 @@ textarea {
   .share-actions-bar {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .review-rail {
+    flex-direction: column;
+    overflow-x: visible;
+    margin: 0;
+    padding-bottom: 0;
+    scroll-snap-type: none;
+  }
+
+  .review-rail .review-card {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .ticket-option {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    row-gap: 8px;
+  }
+
+  .ticket-option-name {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .ticket-option > strong {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+
+  .ticket-option > .ticket-quantity-input {
+    grid-column: 1;
+    grid-row: auto;
+    max-width: 120px;
+  }
+
+  .ticket-option > .early-bird-note {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .checkout-discount {
+    min-width: 0;
+  }
+
+  .discount-input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dashboard-scan-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -1793,6 +1853,9 @@ textarea {
   gap: 6px;
   color: var(--ink-2);
   font-size: 0.92rem;
+  margin: 0;
+  padding: 0;
+  padding-inline-start: 0;
 }
 
 .map-link {
@@ -1901,6 +1964,13 @@ textarea {
 .review-rail .review-card {
   flex: 0 0 min(300px, 88vw);
   scroll-snap-align: start;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.review-explainer {
+  margin: 0 0 12px;
+  line-height: 1.45;
 }
 
 .review-card {
@@ -1938,6 +2008,39 @@ textarea {
 .dashboard-checkin-tools {
   margin-top: 12px;
   margin-bottom: 8px;
+}
+
+.checkin-form-wrap {
+  margin-bottom: 8px;
+}
+
+.checkin-notice {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+}
+
+.checkin-notice--ok {
+  color: var(--teal);
+  border-color: rgba(62, 207, 184, 0.35);
+  background: rgba(62, 207, 184, 0.08);
+}
+
+.checkin-notice--err {
+  color: var(--rose);
+  border-color: rgba(232, 87, 106, 0.35);
+  background: rgba(232, 87, 106, 0.08);
+}
+
+.ticket-feedback-hint {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
 }
 
 .qr-scanner-viewport {
