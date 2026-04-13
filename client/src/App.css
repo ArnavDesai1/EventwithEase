@@ -2943,6 +2943,11 @@ a.site-nav-link {
   cursor: pointer;
 }
 
+.notif-item-main span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .notif-item-pill {
   font-size: 0.62rem;
   font-weight: 800;
@@ -3186,9 +3191,10 @@ a.site-nav-link {
   .notif-panel {
     top: auto;
     bottom: 12px;
-    right: 12px;
-    left: 12px;
-    width: auto;
+    left: 50%;
+    right: auto;
+    width: min(520px, calc(100vw - 24px));
+    transform: translateX(-50%);
     max-height: 56vh;
   }
 }
