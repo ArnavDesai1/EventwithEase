@@ -1014,7 +1014,13 @@ export default function App() {
         callback: handleGoogleCredential,
       });
       const slotWidth = Math.floor(slot.getBoundingClientRect().width || 0);
-      const googleWidth = Math.min(400, Math.max(300, slotWidth || 320));
+      if (slotWidth < 180 && retryCount < 8) {
+        retryCount += 1;
+        retryTimer = window.setTimeout(renderGoogleButton, 140);
+        return;
+      }
+      const targetWidth = slotWidth > 0 ? slotWidth - 8 : 280;
+      const googleWidth = Math.max(220, Math.min(360, targetWidth));
       window.google.accounts.id.renderButton(slot, {
         theme: "outline",
         size: "large",
@@ -1023,9 +1029,9 @@ export default function App() {
       });
 
       // Occasionally GIS races initial paint; retry a few times until an iframe/button is present.
-      if (!slot.querySelector("iframe, div[role='button']") && retryCount < 4) {
+      if (!slot.querySelector("iframe, div[role='button']") && retryCount < 8) {
         retryCount += 1;
-        retryTimer = window.setTimeout(renderGoogleButton, 180);
+        retryTimer = window.setTimeout(renderGoogleButton, 140);
       }
     };
 
