@@ -1002,19 +1002,37 @@ export default function App() {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId || !googleReady || user || !googleButtonRef.current || !window.google || authMode === "forgot" || authMode === "reset") return;
 
-    googleButtonRef.current.innerHTML = "";
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: handleGoogleCredential,
-    });
-    const slotWidth = Math.floor(googleButtonRef.current.getBoundingClientRect().width || 0);
-    const googleWidth = Math.min(400, Math.max(300, slotWidth || 320));
-    window.google.accounts.id.renderButton(googleButtonRef.current, {
-      theme: "outline",
-      size: "large",
-      text: authMode === "signup" ? "signup_with" : "signin_with",
-      width: googleWidth,
-    });
+    const slot = googleButtonRef.current;
+    let retryTimer = null;
+    let retryCount = 0;
+
+    const renderGoogleButton = () => {
+      if (!slot.isConnected) return;
+      slot.innerHTML = "";
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCredential,
+      });
+      const slotWidth = Math.floor(slot.getBoundingClientRect().width || 0);
+      const googleWidth = Math.min(400, Math.max(300, slotWidth || 320));
+      window.google.accounts.id.renderButton(slot, {
+        theme: "outline",
+        size: "large",
+        text: authMode === "signup" ? "signup_with" : "signin_with",
+        width: googleWidth,
+      });
+
+      // Occasionally GIS races initial paint; retry a few times until an iframe/button is present.
+      if (!slot.querySelector("iframe, div[role='button']") && retryCount < 4) {
+        retryCount += 1;
+        retryTimer = window.setTimeout(renderGoogleButton, 180);
+      }
+    };
+
+    requestAnimationFrame(renderGoogleButton);
+    return () => {
+      if (retryTimer) window.clearTimeout(retryTimer);
+    };
   }, [authMode, user, googleReady, authForm.role, hostAuthModalOpen]);
 
   useEffect(() => {
