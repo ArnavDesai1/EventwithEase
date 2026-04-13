@@ -108,6 +108,18 @@ function NotificationsPanel({
 
   if (!open) return null;
 
+  useEffect(() => {
+    document.body.classList.add("notif-overlay-open");
+    function onKey(event) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.classList.remove("notif-overlay-open");
+    };
+  }, [onClose]);
+
   function refundProgressForNotif(n) {
     if (!n || n.kind !== "refund") return null;
     if (n.refundStatus && n.refundStatus !== "pending") return { pct: 100, note: "Resolved" };
@@ -127,7 +139,7 @@ function NotificationsPanel({
     navigate(`/event/${eid}`);
   }
 
-  return (
+  return createPortal(
     <>
       <button type="button" className="notif-backdrop" aria-label="Close notifications" onClick={onClose} />
       <div className="notif-panel" role="dialog" aria-label="Notifications">
@@ -318,7 +330,8 @@ function NotificationsPanel({
           })}
         </ul>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

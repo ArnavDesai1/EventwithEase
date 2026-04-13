@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function TopNav({
@@ -21,6 +21,8 @@ export default function TopNav({
   navActiveKey = "discover",
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const drawerShellRef = useRef(null);
+  const toggleRef = useRef(null);
 
   useEffect(() => {
     if (!menuOpen) return () => {};
@@ -34,6 +36,19 @@ export default function TopNav({
   useEffect(() => {
     document.body.classList.toggle("nav-drawer-open", menuOpen);
     return () => document.body.classList.remove("nav-drawer-open");
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return () => {};
+    function onPointerDown(event) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (drawerShellRef.current?.contains(target)) return;
+      if (toggleRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", onPointerDown, true);
   }, [menuOpen]);
 
   function wrapNav(action) {
@@ -55,6 +70,7 @@ export default function TopNav({
         </button>
 
         <button
+          ref={toggleRef}
           type="button"
           className="site-nav-toggle"
           aria-expanded={menuOpen}
@@ -69,7 +85,7 @@ export default function TopNav({
           <button type="button" className="site-nav-backdrop" tabIndex={-1} aria-label="Close menu" onClick={() => setMenuOpen(false)} />
         ) : null}
 
-        <div className={`site-nav-shell${menuOpen ? " is-open" : ""}`}>
+        <div ref={drawerShellRef} className={`site-nav-shell${menuOpen ? " is-open" : ""}`}>
           <nav id="primary-site-nav" className="site-nav" aria-label="Workspace">
             <button
               type="button"
