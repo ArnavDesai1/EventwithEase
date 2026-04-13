@@ -1003,8 +1003,7 @@ export default function App() {
     if (!clientId || !googleReady || user || !googleButtonRef.current || !window.google || authMode === "forgot" || authMode === "reset") return;
 
     const slot = googleButtonRef.current;
-    let retryTimer = null;
-    let retryCount = 0;
+    const timers = [];
 
     const renderGoogleButton = () => {
       if (!slot.isConnected) return;
@@ -1014,12 +1013,7 @@ export default function App() {
         callback: handleGoogleCredential,
       });
       const slotWidth = Math.floor(slot.getBoundingClientRect().width || 0);
-      if (slotWidth < 180 && retryCount < 8) {
-        retryCount += 1;
-        retryTimer = window.setTimeout(renderGoogleButton, 140);
-        return;
-      }
-      const targetWidth = slotWidth > 0 ? slotWidth - 8 : 280;
+      const targetWidth = slotWidth > 0 ? slotWidth - 8 : 320;
       const googleWidth = Math.max(220, Math.min(360, targetWidth));
       window.google.accounts.id.renderButton(slot, {
         theme: "outline",
@@ -1027,17 +1021,14 @@ export default function App() {
         text: authMode === "signup" ? "signup_with" : "signin_with",
         width: googleWidth,
       });
-
-      // Occasionally GIS races initial paint; retry a few times until an iframe/button is present.
-      if (!slot.querySelector("iframe, div[role='button']") && retryCount < 8) {
-        retryCount += 1;
-        retryTimer = window.setTimeout(renderGoogleButton, 140);
-      }
     };
 
     requestAnimationFrame(renderGoogleButton);
+    // GIS sometimes races hydration/paint; these two passes make first-load render much more stable.
+    timers.push(window.setTimeout(renderGoogleButton, 220));
+    timers.push(window.setTimeout(renderGoogleButton, 760));
     return () => {
-      if (retryTimer) window.clearTimeout(retryTimer);
+      timers.forEach((id) => window.clearTimeout(id));
     };
   }, [authMode, user, googleReady, authForm.role, hostAuthModalOpen]);
 
