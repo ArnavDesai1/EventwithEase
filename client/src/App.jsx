@@ -1000,7 +1000,18 @@ export default function App() {
 
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId || !googleReady || user || !googleButtonRef.current || !window.google || authMode === "forgot" || authMode === "reset") return;
+    if (
+      loading ||
+      !clientId ||
+      !googleReady ||
+      user ||
+      !googleButtonRef.current ||
+      !window.google ||
+      authMode === "forgot" ||
+      authMode === "reset"
+    ) {
+      return;
+    }
 
     const slot = googleButtonRef.current;
     const timers = [];
@@ -1030,7 +1041,7 @@ export default function App() {
     return () => {
       timers.forEach((id) => window.clearTimeout(id));
     };
-  }, [authMode, user, googleReady, authForm.role, hostAuthModalOpen]);
+  }, [authMode, user, googleReady, authForm.role, hostAuthModalOpen, loading]);
 
   useEffect(() => {
     const targetMap = {
