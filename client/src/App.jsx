@@ -2407,16 +2407,14 @@ export default function App() {
   }
 
   function openAccount() {
-    if (hostIdInPath) {
-      if (user) {
-        navigate("/", { state: { focusAccount: true } });
-        return;
-      }
+    // Always open the auth modal from header/menu actions (better UX on mobile vs scrolling).
+    if (!user) {
       setHostAuthModalOpen(true);
       setAuthMode("login");
       return;
     }
-    scrollToRef(authRef);
+    // Signed-in users: keep current behavior (scroll to account panel when on home).
+    if (!hostIdInPath) scrollToRef(authRef);
   }
 
   function goHostProfile(organiserId) {
@@ -2761,6 +2759,88 @@ export default function App() {
             )}
           </main>
         </div>
+        {hostAuthModalOpen
+          ? createPortal(
+              <div className="auth-modal-root" role="presentation">
+                <button
+                  type="button"
+                  className="auth-modal-backdrop"
+                  aria-label="Close sign in"
+                  onClick={() => setHostAuthModalOpen(false)}
+                />
+                <div
+                  className="auth-modal-panel"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="host-auth-modal-title"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="auth-modal-head">
+                    <h2 id="host-auth-modal-title" className="auth-modal-title">
+                      {authMode === "forgot"
+                        ? "Reset password"
+                        : authMode === "reset"
+                          ? "New password"
+                          : authMode === "signup"
+                            ? "Create account"
+                            : "Sign in"}
+                    </h2>
+                    <button type="button" className="ghost-button compact-button" onClick={() => setHostAuthModalOpen(false)}>
+                      Close
+                    </button>
+                  </div>
+                  {authMode === "forgot" || authMode === "reset" ? (
+                    <button className="ghost-button compact-button" type="button" onClick={() => setAuthMode("login")}>
+                      Back to login
+                    </button>
+                  ) : (
+                    <div className="switch-row auth-modal-tabs">
+                      <button
+                        className={`tab${authMode === "login" ? " active" : ""}`}
+                        type="button"
+                        onClick={() => setAuthMode("login")}
+                      >
+                        Login
+                      </button>
+                      <button
+                        className={`tab${authMode === "signup" ? " active" : ""}`}
+                        type="button"
+                        onClick={() => setAuthMode("signup")}
+                      >
+                        Signup
+                      </button>
+                    </div>
+                  )}
+                  <form className="stack-form auth-form host-auth-modal-form" onSubmit={handleAuthSubmit}>
+                    {renderGuestAuthFormFields()}
+                    <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
+                      {authMode === "login"
+                        ? "Login"
+                        : authMode === "signup"
+                          ? "Create account"
+                          : authMode === "forgot"
+                            ? "Send reset mail"
+                            : "Update password"}
+                    </PrimaryButton>
+                    {authMode === "login" && (
+                      <div className="auth-links">
+                        <button type="button" onClick={() => setAuthMode("forgot")}>
+                          Forgot password?
+                        </button>
+                        <button type="button" onClick={resendVerification}>
+                          Resend verify email
+                        </button>
+                      </div>
+                    )}
+                    {authMode === "signup" && <p className="auth-note">We will email a verification link before login is enabled.</p>}
+                    {authMode === "forgot" && <p className="auth-note">Enter your account email and we will send a reset link.</p>}
+                    {authMode === "reset" && <p className="auth-note">Set a fresh password from the secure reset link.</p>}
+                  </form>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
         {gamifyFloatingDock}
         <SiteFooter />
       </div>
@@ -4323,6 +4403,88 @@ export default function App() {
             </main>
           </div>
         </div>
+        {hostAuthModalOpen
+          ? createPortal(
+              <div className="auth-modal-root" role="presentation">
+                <button
+                  type="button"
+                  className="auth-modal-backdrop"
+                  aria-label="Close sign in"
+                  onClick={() => setHostAuthModalOpen(false)}
+                />
+                <div
+                  className="auth-modal-panel"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="host-auth-modal-title"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="auth-modal-head">
+                    <h2 id="host-auth-modal-title" className="auth-modal-title">
+                      {authMode === "forgot"
+                        ? "Reset password"
+                        : authMode === "reset"
+                          ? "New password"
+                          : authMode === "signup"
+                            ? "Create account"
+                            : "Sign in"}
+                    </h2>
+                    <button type="button" className="ghost-button compact-button" onClick={() => setHostAuthModalOpen(false)}>
+                      Close
+                    </button>
+                  </div>
+                  {authMode === "forgot" || authMode === "reset" ? (
+                    <button className="ghost-button compact-button" type="button" onClick={() => setAuthMode("login")}>
+                      Back to login
+                    </button>
+                  ) : (
+                    <div className="switch-row auth-modal-tabs">
+                      <button
+                        className={`tab${authMode === "login" ? " active" : ""}`}
+                        type="button"
+                        onClick={() => setAuthMode("login")}
+                      >
+                        Login
+                      </button>
+                      <button
+                        className={`tab${authMode === "signup" ? " active" : ""}`}
+                        type="button"
+                        onClick={() => setAuthMode("signup")}
+                      >
+                        Signup
+                      </button>
+                    </div>
+                  )}
+                  <form className="stack-form auth-form host-auth-modal-form" onSubmit={handleAuthSubmit}>
+                    {renderGuestAuthFormFields()}
+                    <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
+                      {authMode === "login"
+                        ? "Login"
+                        : authMode === "signup"
+                          ? "Create account"
+                          : authMode === "forgot"
+                            ? "Send reset mail"
+                            : "Update password"}
+                    </PrimaryButton>
+                    {authMode === "login" && (
+                      <div className="auth-links">
+                        <button type="button" onClick={() => setAuthMode("forgot")}>
+                          Forgot password?
+                        </button>
+                        <button type="button" onClick={resendVerification}>
+                          Resend verify email
+                        </button>
+                      </div>
+                    )}
+                    {authMode === "signup" && <p className="auth-note">We will email a verification link before login is enabled.</p>}
+                    {authMode === "forgot" && <p className="auth-note">Enter your account email and we will send a reset link.</p>}
+                    {authMode === "reset" && <p className="auth-note">Set a fresh password from the secure reset link.</p>}
+                  </form>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
         {gamifyFloatingDock}
         <SiteFooter />
       </div>
@@ -4896,6 +5058,80 @@ export default function App() {
       </main>
     </div>
   </div>
+  {hostAuthModalOpen
+    ? createPortal(
+        <div className="auth-modal-root" role="presentation">
+          <button
+            type="button"
+            className="auth-modal-backdrop"
+            aria-label="Close sign in"
+            onClick={() => setHostAuthModalOpen(false)}
+          />
+          <div
+            className="auth-modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="host-auth-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="auth-modal-head">
+              <h2 id="host-auth-modal-title" className="auth-modal-title">
+                {authMode === "forgot"
+                  ? "Reset password"
+                  : authMode === "reset"
+                    ? "New password"
+                    : authMode === "signup"
+                      ? "Create account"
+                      : "Sign in"}
+              </h2>
+              <button type="button" className="ghost-button compact-button" onClick={() => setHostAuthModalOpen(false)}>
+                Close
+              </button>
+            </div>
+            {authMode === "forgot" || authMode === "reset" ? (
+              <button className="ghost-button compact-button" type="button" onClick={() => setAuthMode("login")}>
+                Back to login
+              </button>
+            ) : (
+              <div className="switch-row auth-modal-tabs">
+                <button className={`tab${authMode === "login" ? " active" : ""}`} type="button" onClick={() => setAuthMode("login")}>
+                  Login
+                </button>
+                <button className={`tab${authMode === "signup" ? " active" : ""}`} type="button" onClick={() => setAuthMode("signup")}>
+                  Signup
+                </button>
+              </div>
+            )}
+            <form className="stack-form auth-form host-auth-modal-form" onSubmit={handleAuthSubmit}>
+              {renderGuestAuthFormFields()}
+              <PrimaryButton type="submit" style={{ width: "100%", marginTop: "2px" }}>
+                {authMode === "login"
+                  ? "Login"
+                  : authMode === "signup"
+                    ? "Create account"
+                    : authMode === "forgot"
+                      ? "Send reset mail"
+                      : "Update password"}
+              </PrimaryButton>
+              {authMode === "login" && (
+                <div className="auth-links">
+                  <button type="button" onClick={() => setAuthMode("forgot")}>
+                    Forgot password?
+                  </button>
+                  <button type="button" onClick={resendVerification}>
+                    Resend verify email
+                  </button>
+                </div>
+              )}
+              {authMode === "signup" && <p className="auth-note">We will email a verification link before login is enabled.</p>}
+              {authMode === "forgot" && <p className="auth-note">Enter your account email and we will send a reset link.</p>}
+              {authMode === "reset" && <p className="auth-note">Set a fresh password from the secure reset link.</p>}
+            </form>
+          </div>
+        </div>,
+        document.body
+      )
+    : null}
   {gamifyFloatingDock}
   <SiteFooter />
 </div>

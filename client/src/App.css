@@ -3404,7 +3404,7 @@ body.nav-drawer-open {
   .site-nav-shell {
     display: none;
     position: fixed;
-    z-index: 45;
+    z-index: 1200;
     top: 0;
     right: 0;
     flex: none;
@@ -3449,12 +3449,13 @@ body.nav-drawer-open {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 44;
+    z-index: 1199;
     border: 0;
     padding: 0;
     margin: 0;
     background: rgba(0, 0, 0, 0.55);
     cursor: pointer;
+    touch-action: none;
   }
 
   .site-header-inner {
