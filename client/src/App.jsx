@@ -108,6 +108,20 @@ function NotificationsPanel({
 
   if (!open) return null;
 
+  function refundProgressForNotif(n) {
+    if (!n || n.kind !== "refund") return null;
+    if (n.refundStatus && n.refundStatus !== "pending") return { pct: 100, note: "Resolved" };
+    const now = Date.now();
+    const autoAt = n.refundAutoApproveAt ? new Date(n.refundAutoApproveAt).getTime() : NaN;
+    if (!Number.isFinite(autoAt)) return null;
+    const createdAt = n.refundCreatedAt ? new Date(n.refundCreatedAt).getTime() : NaN;
+    const start = Number.isFinite(createdAt) ? createdAt : autoAt - 24 * 60 * 60 * 1000;
+    const span = Math.max(1, autoAt - start);
+    const pct = Math.max(0, Math.min(100, ((now - start) / span) * 100));
+    const left = Math.max(0, autoAt - now);
+    return { pct, note: left > 0 ? `Auto-approves in ${fmtCountdown(left, { withSeconds: false })}` : "Auto-approve window reached" };
+  }
+
   function goEventFromPanel(eid) {
     onClose();
     navigate(`/event/${eid}`);
@@ -249,6 +263,7 @@ function NotificationsPanel({
               n.id?.startsWith("start:") ||
               n.id?.startsWith("cancel:") ||
               n.id?.startsWith("texp:");
+            const refundProg = refundProgressForNotif(n);
             return (
               <li key={n.id} className={`notif-item${n.read ? " is-read" : ""}${essential ? " notif-item--essential" : ""}`}>
                 <div className="notif-item-row">
@@ -264,6 +279,14 @@ function NotificationsPanel({
                     {essential ? <span className="notif-item-pill">Essential</span> : null}
                     <strong>{n.title}</strong>
                     <span>{n.body}</span>
+                    {refundProg ? (
+                      <div className="refund-progress">
+                        <div className="mini-progress mini-progress--refund" aria-label="Refund progress">
+                          <div className="mini-progress-fill" style={{ width: `${refundProg.pct}%` }} />
+                        </div>
+                        {refundProg.note ? <p className="refund-progress-note">{refundProg.note}</p> : null}
+                      </div>
+                    ) : null}
                     <span className="notif-item-time">{new Date(n.at).toLocaleString()}</span>
                   </button>
                   {!locked ? (
@@ -3594,9 +3617,22 @@ export default function App() {
                     <h3>{evMerged?.title || ticket.eventId?.title}</h3>
                     <p>{ticket.ticketTypeName}</p>
                     {eventNotStarted && untilStart != null ? (
-                      <p className="ticket-countdown-line" role="status">
-                        <strong>{formatMsAsCountdown(untilStart)}</strong> until doors · {formatDate(eventDateVal)}
-                      </p>
+                      <>
+                        <p className="ticket-countdown-line" role="status">
+                          <strong>{formatMsAsCountdown(untilStart)}</strong> until doors · {formatDate(eventDateVal)}
+                        </p>
+                        <div className="ticket-time-progress" aria-label="Time to doors">
+                          {(() => {
+                            const windowMs = 7 * 24 * 60 * 60 * 1000;
+                            const pct = Math.max(0, Math.min(100, (1 - Math.min(windowMs, untilStart) / windowMs) * 100));
+                            return (
+                              <div className="mini-progress" role="presentation">
+                                <div className="mini-progress-fill" style={{ width: `${pct}%` }} />
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </>
                     ) : null}
                     {canCancelBooking ? (
                       <p className="auth-note ticket-cancel-hint">
@@ -4373,7 +4409,29 @@ export default function App() {
                             .join(" · ")}
                         </p>
                         {refund.status === "pending" && refund.autoApproveAt ? (
-                          <p className="auth-note">Auto-approve by {formatDate(refund.autoApproveAt)}</p>
+                          <>
+                            <p className="auth-note">Auto-approve by {formatDate(refund.autoApproveAt)}</p>
+                            <div className="refund-progress" aria-label="Refund auto-approval progress">
+                              {(() => {
+                                const now = Date.now();
+                                const autoAt = new Date(refund.autoApproveAt).getTime();
+                                const createdAt = refund.createdAt ? new Date(refund.createdAt).getTime() : autoAt - 24 * 60 * 60 * 1000;
+                                const span = Math.max(1, autoAt - createdAt);
+                                const pct = Math.max(0, Math.min(100, ((now - createdAt) / span) * 100));
+                                const left = Math.max(0, autoAt - now);
+                                return (
+                                  <>
+                                    <div className="mini-progress mini-progress--refund">
+                                      <div className="mini-progress-fill" style={{ width: `${pct}%` }} />
+                                    </div>
+                                    <p className="refund-progress-note">
+                                      {left > 0 ? `Auto-approves in ${formatMsAsCountdown(left, { withSeconds: false })}` : "Auto-approve window reached"}
+                                    </p>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </>
                         ) : null}
                         {refund.resolvedAt ? <p className="auth-note">Resolved {formatDate(refund.resolvedAt)}</p> : null}
                       </div>

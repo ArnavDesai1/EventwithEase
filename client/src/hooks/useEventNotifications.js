@@ -411,6 +411,10 @@ export function useEventNotifications({
           body: `${title}: fee ${fee}, net ${net}. Auto-approve by ${when}.`,
           link: "/tickets",
           importance: "essential",
+          kind: "refund",
+          refundStatus: "pending",
+          refundCreatedAt: r.createdAt || "",
+          refundAutoApproveAt: r.autoApproveAt || "",
         });
       }
       if (r.status === "approved" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
@@ -420,6 +424,9 @@ export function useEventNotifications({
           body: `${title}: net ${r.refundNetAmount ?? ""} marked settled.`,
           link: "/tickets",
           importance: "essential",
+          kind: "refund",
+          refundStatus: "approved",
+          refundResolvedAt: r.resolvedAt || "",
         });
       }
       if (r.status === "rejected" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
@@ -429,6 +436,9 @@ export function useEventNotifications({
           body: `${title}: request was not approved — check email or support.`,
           link: "/tickets",
           importance: "essential",
+          kind: "refund",
+          refundStatus: "rejected",
+          refundResolvedAt: r.resolvedAt || "",
         });
       }
     }
@@ -447,6 +457,10 @@ export function useEventNotifications({
           body: `${who} · ${title} · net ${r.refundNetAmount ?? "—"} after fee · auto-approves on schedule.`,
           link: "/check-in",
           importance: "essential",
+          kind: "refund",
+          refundStatus: "pending",
+          refundCreatedAt: r.createdAt || "",
+          refundAutoApproveAt: r.autoApproveAt || "",
         });
       }
       if (r.status === "approved" && r.resolvedAt && Date.now() - new Date(r.resolvedAt).getTime() < RESOLVED_NOTIF_MAX_AGE_MS) {
@@ -456,6 +470,9 @@ export function useEventNotifications({
           body: `${title}: ${who} — net ${r.refundNetAmount ?? ""} left your payout balance.`,
           link: "/check-in",
           importance: "essential",
+          kind: "refund",
+          refundStatus: "approved",
+          refundResolvedAt: r.resolvedAt || "",
         });
       }
     }

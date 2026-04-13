@@ -2874,6 +2874,40 @@ a.site-nav-link {
   font-variant-numeric: tabular-nums;
 }
 
+.mini-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal), var(--amber));
+  transition: width 0.35s var(--ease-out);
+  min-width: 6px;
+}
+
+.mini-progress--refund .mini-progress-fill {
+  background: linear-gradient(90deg, rgba(232, 168, 87, 0.65), var(--teal));
+}
+
+.ticket-time-progress {
+  margin: 8px 0 10px;
+}
+
+.refund-progress {
+  margin-top: 10px;
+  max-width: 320px;
+}
+
+.refund-progress-note {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
 .ticket-cancel-hint {
   margin: 0 0 10px;
   font-size: 0.8rem;
