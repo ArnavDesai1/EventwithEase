@@ -240,6 +240,15 @@ function NotificationsPanel({
           ) : null}
           {notifications.map((n) => {
             const essential = n.importance === "essential";
+            const locked =
+              n.id?.startsWith("dailybook:") ||
+              n.id?.startsWith("w7:") ||
+              n.id?.startsWith("d1:") ||
+              n.id?.startsWith("h1:") ||
+              n.id?.startsWith("m15:") ||
+              n.id?.startsWith("start:") ||
+              n.id?.startsWith("cancel:") ||
+              n.id?.startsWith("texp:");
             return (
               <li key={n.id} className={`notif-item${n.read ? " is-read" : ""}${essential ? " notif-item--essential" : ""}`}>
                 <div className="notif-item-row">
@@ -257,23 +266,29 @@ function NotificationsPanel({
                     <span>{n.body}</span>
                     <span className="notif-item-time">{new Date(n.at).toLocaleString()}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="notif-item-remove"
-                    title={essential ? "Remove for now — may return if still relevant" : "Remove permanently"}
-                    aria-label={essential ? "Remove essential alert for now" : "Remove alert permanently"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      dismissNotif(n.id);
-                      flash(
-                        essential
-                          ? "Removed — essentials can reappear later if still relevant."
-                          : "Removed — this reminder will not be shown again."
-                      );
-                    }}
-                  >
-                    ×
-                  </button>
+                  {!locked ? (
+                    <button
+                      type="button"
+                      className="notif-item-remove"
+                      title={essential ? "Remove for now — may return if still relevant" : "Remove permanently"}
+                      aria-label={essential ? "Remove essential alert for now" : "Remove alert permanently"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dismissNotif(n.id);
+                        flash(
+                          essential
+                            ? "Removed — essentials can reappear later if still relevant."
+                            : "Removed — this reminder will not be shown again."
+                        );
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : (
+                    <span className="notif-item-locked" title="Ticket timing/status alerts cannot be removed">
+                      Locked
+                    </span>
+                  )}
                 </div>
               </li>
             );
