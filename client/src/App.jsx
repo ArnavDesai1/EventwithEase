@@ -106,9 +106,8 @@ function NotificationsPanel({
 }) {
   const [soundOn, setSoundOn] = useState(() => isNotifSoundEnabled());
 
-  if (!open) return null;
-
   useEffect(() => {
+    if (!open) return () => {};
     document.body.classList.add("notif-overlay-open");
     function onKey(event) {
       if (event.key === "Escape") onClose();
@@ -118,7 +117,9 @@ function NotificationsPanel({
       window.removeEventListener("keydown", onKey);
       document.body.classList.remove("notif-overlay-open");
     };
-  }, [onClose]);
+  }, [open, onClose]);
+
+  if (!open) return null;
 
   function refundProgressForNotif(n) {
     if (!n || n.kind !== "refund") return null;
