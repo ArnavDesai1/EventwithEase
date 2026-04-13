@@ -692,6 +692,7 @@ textarea {
 .oauth-wrap {
   min-height: 64px;
   display: grid;
+  justify-items: center;
   align-items: start;
   gap: 8px;
   overflow: visible;
@@ -702,10 +703,18 @@ textarea {
   margin: 0;
   font-size: 0.78rem;
   color: var(--ink-3);
+  justify-self: start;
+  width: 100%;
 }
 
 .google-button-slot {
   width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.google-button-slot > div {
+  margin: 0 auto !important;
 }
 
 .auth-links {
