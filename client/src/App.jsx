@@ -1007,11 +1007,13 @@ export default function App() {
       client_id: clientId,
       callback: handleGoogleCredential,
     });
+    const slotWidth = Math.floor(googleButtonRef.current.getBoundingClientRect().width || 0);
+    const googleWidth = Math.min(400, Math.max(300, slotWidth || 320));
     window.google.accounts.id.renderButton(googleButtonRef.current, {
       theme: "outline",
       size: "large",
       text: authMode === "signup" ? "signup_with" : "signin_with",
-      width: googleButtonRef.current.offsetWidth || 260,
+      width: googleWidth,
     });
   }, [authMode, user, googleReady, authForm.role, hostAuthModalOpen]);
 

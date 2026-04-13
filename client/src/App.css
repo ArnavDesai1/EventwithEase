@@ -3891,7 +3891,7 @@ body.nav-drawer-open {
 .auth-modal-panel {
   position: relative;
   z-index: 1;
-  width: min(440px, 100%);
+  width: min(410px, 100%);
   margin-top: max(6vh, 32px);
   padding: 20px 22px 24px;
   border-radius: var(--r-md, 14px);
