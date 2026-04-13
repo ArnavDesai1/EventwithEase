@@ -3409,7 +3409,7 @@ body.nav-drawer-open {
     right: 0;
     flex: none;
     justify-content: flex-start;
-    width: min(340px, 92vw);
+    width: min(320px, 82vw);
     height: 100vh;
     padding: 72px 20px 24px;
     flex-direction: column;

@@ -4514,7 +4514,7 @@ export default function App() {
       <main id="ewe-main" className="grid-layout">
         <section
           id="ewe-account"
-          className={panelClass("panel auth-panel full-width", ["organiser", "checkin"])}
+          className={panelClass("panel auth-panel full-width", ["attendee", "organiser", "checkin"])}
           ref={authRef}
         >
           <div className="section-head auth-head">
