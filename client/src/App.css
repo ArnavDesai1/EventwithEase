@@ -4490,6 +4490,9 @@ body.notif-overlay-open {
 
 .fan-progress-card--floating {
   margin-top: 0;
+  background: linear-gradient(155deg, rgba(12, 16, 24, 0.97), rgba(9, 12, 18, 0.98));
+  border-color: rgba(232, 168, 87, 0.35);
+  backdrop-filter: blur(14px);
 }
 
 .gamify-floating-dismiss {
