@@ -1344,11 +1344,12 @@ export default function App() {
               onChange={(e) => updateAuthField("password", e.target.value)}
             />
             <div className="oauth-wrap">
+              <p className="oauth-label">{authMode === "signup" ? "Or sign up with Google" : "Or sign in with Google"}</p>
               {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
                 <div ref={googleButtonRef} className="google-button-slot" />
               ) : (
                 <button className="google-disabled" type="button" disabled>
-                  Google sign-in not configured
+                  {authMode === "signup" ? "Google sign-up not configured" : "Google sign-in not configured"}
                 </button>
               )}
             </div>
